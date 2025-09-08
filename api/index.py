@@ -39,8 +39,16 @@ GENERATED_NUMBERS_TABLE_NAME = 'generated_powerball_numbers'
 if not SUPABASE_URL or not SUPABASE_ANON_KEY:
     raise ValueError("SUPABASE_URL and SUPABASE_ANON_KEY must be set in environment variables")
 
+
+
 # Initialize Supabase client
 supabase: Client = create_client(SUPABASE_URL, SUPABASE_ANON_KEY)
+try:
+    MODEL = joblib.load('trained_model.joblib')
+    print("✅ Pre-trained model loaded successfully")
+except FileNotFoundError:
+    print("⚠ No pre-trained model found. Using random generation as fallback")
+    MODEL = None
 
 def fetch_historical_draws(limit: int = 1000) -> List[dict]:
     """Fetches historical draws from Supabase"""
