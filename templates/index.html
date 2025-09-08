@@ -1,1 +1,23 @@
+<!-- Create a templates/index.html file -->
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Powerball Generator</title>
+</head>
+<body>
+    <h1>Generate Powerball Numbers</h1>
+    <button onclick="generateNumbers()">Generate Numbers</button>
+    <div id="result"></div>
 
+    <script>
+        async function generateNumbers() {
+            const response = await fetch('/generate');
+            const data = await response.json();
+            document.getElementById('result').innerHTML = `
+                <h2>Numbers: ${data.generated_numbers.white_balls.join(', ')} Powerball: ${data.generated_numbers.powerball}</h2>
+                <p>Analysis: ${data.analysis.message}</p>
+            `;
+        }
+    </script>
+</body>
+</html>
