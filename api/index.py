@@ -50,7 +50,7 @@ def fetch_historical_draws(limit: int = 1000) -> List[dict]:
                           .order('draw_date', desc=True) \
                           .limit(limit) \
                           .execute()
-        return response.data
+               return response.data
     except Exception as e:
         print(f"Error fetching data from Supabase: {e}")
         return []
