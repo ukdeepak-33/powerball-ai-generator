@@ -165,3 +165,9 @@ async def analyze_trends():
 @app.get("/health")
 async def health_check():
     return {"status": "healthy", "message": "Service is running normally"}
+
+# Add this to the VERY BOTTOM of your api/index.py file
+if __name__ == "__main__":
+    import uvicorn
+    port = int(os.environ.get("PORT", 8000))  # Use Render's PORT or default to 8000
+    uvicorn.run(app, host="0.0.0.0", port=port)
