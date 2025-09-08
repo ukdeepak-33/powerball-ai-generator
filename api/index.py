@@ -45,16 +45,16 @@ supabase: Client = create_client(SUPABASE_URL, SUPABASE_ANON_KEY)
 def fetch_historical_draws(limit: int = 1000) -> List[dict]:
     """Fetches historical draws from Supabase"""
     try:
-                response = supabase.table(SUPABASE_TABLE_NAME) \
+        response = supabase.table(SUPABASE_TABLE_NAME) \
                           .select('*') \
                           .order('draw_date', desc=True) \
                           .limit(limit) \
                           .execute()
-               return response.data
+        return response.data
     except Exception as e:
         print(f"Error fetching data from Supabase: {e}")
         return []
-
+        
 def prepare_features(draws_df: pd.DataFrame) -> pd.DataFrame:
     """Engineers features from raw draw data"""
     white_ball_columns = ['num1', 'num2', 'num3', 'num4', 'num5']
