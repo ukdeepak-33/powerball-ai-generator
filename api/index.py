@@ -44,11 +44,65 @@ if not SUPABASE_URL or not SUPABASE_ANON_KEY:
 # Initialize Supabase client
 supabase: Client = create_client(SUPABASE_URL, SUPABASE_ANON_KEY)
 try:
+    # Load the trained model
     MODEL = joblib.load('trained_model.joblib')
-    print("✅ Pre-trained model loaded successfully")
+    print("✅ Trained ML model loaded successfully!")
 except FileNotFoundError:
     print("⚠ No pre-trained model found. Using random generation as fallback")
     MODEL = None
+
+# Add this function to use the ML model for predictions
+def predict_numbers(historical_data):
+    """Use ML model to predict numbers based on historical data"""
+    if MODEL is None:
+        # Fallback to random if no model
+        white_balls = sorted(np.random.choice(range(1, 70), size=5, replace=False))
+        powerball = np.random.randint(1, 27)
+        return white_balls, powerball
+    
+    # Prepare features from historical data (same as training)
+    df = pd.DataFrame(historical_data)
+    number_columns = ['Number 1', 'Number 2', 'Number 3', 'Number 4', 'Number 5']
+    
+    # Use the last 5 draws to make prediction (same as training)
+    if len(df) >= 5:
+        recent_draws = df.iloc[-5:]
+        
+        # Create feature vector exactly like during training
+        feature = np.zeros(69)
+        for _, draw in recent_draws.iterrows():
+            numbers = [draw['Number 1'], draw['Number 2'], draw['Number 3'],
+                      draw['Number 4'], draw['Number 5']]
+            for num in numbers:
+                if isinstance(num, (int, float)) and 1 <= num <= 69:
+                    feature[int(num)-1] += 1
+        
+        # Get prediction probabilities from model
+        probabilities = MODEL.predict_proba([feature])
+        
+        # Get the most likely numbers
+        predicted_numbers = []
+        for i, proba in enumerate(probabilities):
+            # Get probabilities for this number position
+            number_probs = proba[0][:, 1]  # Probability that number is present
+            
+            # Add some randomness to avoid always same numbers
+            adjusted_probs = number_probs * np.random.uniform(0.8, 1.2, size=number_probs.shape)
+            
+            # Get top candidates
+            top_candidates = list(np.argsort(adjusted_probs)[-10:])  # Top 10 likely numbers
+            predicted_numbers.extend(top_candidates)
+        
+        # Get unique numbers and select top 5
+        unique_numbers = list(set(predicted_numbers))
+        white_balls = sorted([x + 1 for x in unique_numbers[-5:]])  # Convert back to 1-69
+        
+    else:
+        # Not enough data, use random
+        white_balls = sorted(np.random.choice(range(1, 70), size=5, replace=False))
+    
+    powerball = np.random.randint(1, 27)  # Powerball is separate
+    return white_balls, powerball
 
 def fetch_historical_draws(limit: int = 1000) -> List[dict]:
     """Fetches historical draws from Supabase"""
@@ -114,8 +168,7 @@ async def generate_numbers():
         engineered_data = prepare_features(df)
         
         # For now, generate random numbers (Replace with your ML model later)
-        white_balls = sorted(np.random.choice(range(1, 70), size=5, replace=False))
-        powerball = np.random.randint(1, 27)
+        white_balls, powerball = predict_numbers(historical_data)
         
         # Analyze the generated numbers
         group_a_count = sum(1 for num in white_balls if num in GROUP_A_NUMBERS)
