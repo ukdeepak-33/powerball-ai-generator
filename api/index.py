@@ -74,25 +74,39 @@ def predict_numbers(historical_data):
                 if isinstance(num, (int, float)) and 1 <= num <= 69:
                     feature[int(num)-1] += 1
         
-        # Get prediction probabilities from model
-        probabilities = MODEL.predict_proba([feature])
-        
-        # Get the most likely numbers
-        predicted_numbers = []
-        for i, proba in enumerate(probabilities):
-            # Get probabilities for this number position
-            number_probs = proba[0][:, 1]  # Probability that number is present
+        try:
+            # Get prediction probabilities from model
+            probabilities = MODEL.predict_proba([feature])
             
-            # Add some randomness to avoid always same numbers
-            adjusted_probs = number_probs * np.random.uniform(0.8, 1.2, size=number_probs.shape)
+            # Debug: Check the shape of probabilities
+            print(f"🔍 Probabilities shape: {[p.shape for p in probabilities] if hasattr(probabilities, '__iter__') else probabilities.shape}")
             
-            # Get top candidates
-            top_candidates = list(np.argsort(adjusted_probs)[-10:])  # Top 10 likely numbers
-            predicted_numbers.extend(top_candidates)
-        
-        # Get unique numbers and select top 5
-        unique_numbers = list(set(predicted_numbers))
-        white_balls = sorted([x + 1 for x in unique_numbers[-5:]])  # Convert back to 1-69
+            # Get the most likely numbers - FIXED VERSION
+            number_scores = np.zeros(69)
+            
+            for i, proba in enumerate(probabilities):
+                # Handle different probability array shapes
+                if hasattr(proba, 'shape') and len(proba.shape) == 2:
+                    # Standard case: 2D array with [class_0_probs, class_1_probs]
+                    number_probs = proba[:, 1]  # Probability that number is present
+                elif hasattr(proba, 'shape') and len(proba.shape) == 3:
+                    # Some models return 3D array
+                    number_probs = proba[0, :, 1]  # First sample, all numbers, class 1
+                else:
+                    # Fallback: use the array as is
+                    number_probs = proba
+                
+                # Add some randomness to avoid always same numbers
+                adjusted_probs = number_probs * np.random.uniform(0.8, 1.2, size=number_probs.shape)
+                number_scores += adjusted_probs
+            
+            # Get top 5 numbers with highest scores
+            top_5_indices = np.argsort(number_scores)[-5:]
+            white_balls = sorted([x + 1 for x in top_5_indices])  # Convert back to 1-69
+            
+        except Exception as e:
+            print(f"❌ ML prediction failed: {e}, using random fallback")
+            white_balls = sorted(np.random.choice(range(1, 70), size=5, replace=False))
         
     else:
         # Not enough data, use random
@@ -100,6 +114,7 @@ def predict_numbers(historical_data):
     
     powerball = np.random.randint(1, 27)  # Powerball is separate
     return white_balls, powerball
+
 
 def fetch_historical_draws(limit: int = 1000) -> List[dict]:
     """Fetches historical draws from Supabase"""
