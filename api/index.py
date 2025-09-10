@@ -1,9 +1,7 @@
-# api/index.py
+# api/index.py#
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse, FileResponse, HTMLResponse
-from fastapi.staticfiles import StaticFiles
-from fastapi.templating import Jinja2Templates
+from fastapi.responses import JSONResponse, HTMLResponse
 from supabase import create_client, Client
 import pandas as pd
 import numpy as np
@@ -18,10 +16,6 @@ load_dotenv()
 
 # Initialize FastAPI app
 app = FastAPI(title="Powerball AI Generator", version="1.0.0")
-
-# Serve static files and templates
-app.mount("/static", StaticFiles(directory="static"), name="static")
-templates = Jinja2Templates(directory="templates")
 
 # Add CORS middleware
 app.add_middleware(
@@ -154,18 +148,45 @@ def prepare_features(draws_df: pd.DataFrame) -> pd.DataFrame:
     return df
 
 @app.get("/", response_class=HTMLResponse)
-async def read_root(request: Request):
+async def read_root():
     """Serve the HTML homepage"""
     index_path = Path("templates/index.html")
     if index_path.exists():
-        return templates.TemplateResponse("index.html", {"request": request})
+        with open(index_path, 'r') as f:
+            html_content = f.read()
+        return HTMLResponse(content=html_content)
     else:
         return HTMLResponse("""
+        <!DOCTYPE html>
         <html>
-            <body>
-                <h1>Powerball AI Generator</h1>
-                <p>API is running! Visit <a href="/generate">/generate</a> for numbers or <a href="/docs">/docs</a> for API documentation.</p>
-            </body>
+        <head>
+            <title>Powerball AI Generator</title>
+            <style>
+                body { font-family: Arial, sans-serif; max-width: 800px; margin: 0 auto; padding: 20px; }
+                h1 { color: #2c3e50; text-align: center; }
+                .btn { background: #e74c3c; color: white; padding: 15px 30px; border: none; border-radius: 5px; 
+                      font-size: 18px; cursor: pointer; display: block; margin: 20px auto; }
+                .btn:hover { background: #c0392b; }
+            </style>
+        </head>
+        <body>
+            <h1>🎰 Powerball AI Generator</h1>
+            <p style="text-align: center;">API is running successfully! 🚀</p>
+            <div style="text-align: center;">
+                <a href="/generate" style="text-decoration: none;">
+                    <button class="btn">Generate Numbers</button>
+                </a>
+                <a href="/analyze" style="text-decoration: none;">
+                    <button class="btn" style="background: #3498db;">Analyze Trends</button>
+                </a>
+                <a href="/docs" style="text-decoration: none;">
+                    <button class="btn" style="background: #27ae60;">API Documentation</button>
+                </a>
+            </div>
+            <p style="text-align: center; margin-top: 30px;">
+                Your AI-powered Powerball number generator is ready to use!
+            </p>
+        </body>
         </html>
         """)
 
@@ -245,4 +266,5 @@ async def health_check():
 if __name__ == "__main__":
     import uvicorn
     port = int(os.environ.get("PORT", 8000))
+    uvicorn.run(app, host="0.0.0.0", port=port)
     uvicorn.run(app, host="0.0.0.0", port=port)
