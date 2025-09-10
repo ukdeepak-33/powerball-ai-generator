@@ -211,7 +211,7 @@ def detect_number_patterns(white_balls: List[int]) -> Dict[str, Any]:
         'tens_apart': [],
         'same_last_digit': [],
         'consecutive_pairs': [],
-        'repeating_digits': []
+        'repeating_digits': []  # This will always be a list
     }
     
     if not white_balls or len(white_balls) < 2:
@@ -258,7 +258,7 @@ def detect_number_patterns(white_balls: List[int]) -> Dict[str, Any]:
     # 4. Detect repeating digits (11, 22, 33, etc.)
     repeating = [num for num in sorted_balls if num < 70 and num % 11 == 0]
     if repeating:
-        patterns['repeating_digits'] = repeating
+        patterns['repeating_digits'] = repeating  # This will always be a list
         
     print(f"DEBUG: Final patterns: {patterns}")
     return patterns
