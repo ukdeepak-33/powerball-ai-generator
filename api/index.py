@@ -311,6 +311,16 @@ async def generate_numbers():
         # Get 2025 frequencies
         data_2025 = fetch_2025_draws()
         freq_2025 = get_2025_frequencies(white_balls, powerball, data_2025)
+
+        # Detect patterns in generated numbers
+        print("🔍 Detecting patterns...")
+        patterns = detect_number_patterns(white_balls)
+        print(f"✅ Patterns detected: {patterns}")
+        
+        # Analyze pattern history
+        pattern_history = analyze_pattern_history(patterns, historical_data)
+        pattern_analysis = format_pattern_analysis(pattern_history)
+        print(f"📊 Pattern analysis complete")
         
         return JSONResponse({
             "generated_numbers": {
@@ -328,7 +338,9 @@ async def generate_numbers():
                     "white_balls": freq_2025['white_ball_counts'],
                     "powerball": freq_2025['powerball_count'],
                     "total_draws_2025": freq_2025['total_2025_draws']
-                }
+                },
+                # NEW: Pattern analysis
+                "pattern_analysis": pattern_analysis
             }
         })
     except Exception as e:
