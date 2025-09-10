@@ -1,4 +1,4 @@
-# api/index.py#
+# api/index.py
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, HTMLResponse
@@ -31,7 +31,7 @@ GROUP_A_NUMBERS = {3, 5, 6, 7, 9, 11, 15, 16, 18, 21, 23, 24, 27, 31, 32, 33, 36
 
 # --- Supabase Configuration ---
 SUPABASE_URL = os.environ.get("SUPABASE_URL", "https://yksxzbbcoitehdmsxqex.supabase.co")
-SUPABASE_ANON_KEY = os.environ.get("SUPABASE_ANON_KEY", "YOUR_ACTUAL_SUPABASE_ANON_KEY_GOES_HERE")
+SUPABASE_ANON_KEY = os.environ.get("SUPABASE_ANON_KEY", "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inlrc3h6YmJjb2l0ZWhkbXN4cWV4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDk3NzMwNjUsImV4cCI6MjA2NTM0OTA2NX0.AzUD7wjR7VbvtUH27NDqJ3AlvFW0nCWpiN9ADG8T_t4")
 
 SUPABASE_TABLE_NAME = 'powerball_draws'
 
@@ -121,16 +121,20 @@ def prepare_features(draws_df: pd.DataFrame) -> pd.DataFrame:
     
     # Ensure we have the required columns
     if not all(col in draws_df.columns for col in white_ball_columns):
-        raise ValueError("DataFrame missing required white ball columns")
+        available_cols = list(draws_df.columns)
+        print(f"Available columns: {available_cols}")
+        print(f"Required columns: {white_ball_columns}")
+        raise ValueError(f"DataFrame missing required white ball columns. Available: {available_cols}")
     
     # Create a copy to avoid modifying the original
     df = draws_df.copy()
     
+    # FIXED: Replace deprecated applymap with map
     # Feature: Count of Group A numbers
-    df['group_a_count'] = df[white_ball_columns].applymap(lambda x: x in GROUP_A_NUMBERS).sum(axis=1)
+    df['group_a_count'] = df[white_ball_columns].map(lambda x: x in GROUP_A_NUMBERS).sum(axis=1)
     
     # Feature: Odd/Even count
-    df['odd_count'] = df[white_ball_columns].applymap(lambda x: x % 2 == 1).sum(axis=1)
+    df['odd_count'] = df[white_ball_columns].map(lambda x: x % 2 == 1).sum(axis=1)
     
     # Feature: Sum of white balls
     df['sum_white'] = df[white_ball_columns].sum(axis=1)
@@ -195,17 +199,27 @@ async def generate_numbers():
     """Generate Powerball numbers with analysis"""
     try:
         # Fetch historical data
+        print("📊 Fetching historical data...")
         historical_data = fetch_historical_draws(limit=500)
         if not historical_data:
+            print("❌ No historical data found")
             raise HTTPException(status_code=404, detail="No historical data found")
         
+        print(f"✅ Found {len(historical_data)} historical draws")
+        
         df = pd.DataFrame(historical_data)
+        print(f"📋 DataFrame columns: {list(df.columns)}")
+        print(f"📋 First row: {dict(df.iloc[0]) if len(df) > 0 else 'No data'}")
         
         # Prepare features
+        print("🔧 Preparing features...")
         engineered_data = prepare_features(df)
+        print("✅ Features prepared successfully")
         
         # Generate numbers using ML model
+        print("🤖 Generating numbers with ML model...")
         white_balls, powerball = predict_numbers(historical_data)
+        print(f"✅ Generated numbers: {white_balls}, Powerball: {powerball}")
         
         # Analyze the generated numbers
         group_a_count = sum(1 for num in white_balls if num in GROUP_A_NUMBERS)
@@ -225,6 +239,9 @@ async def generate_numbers():
         })
         
     except Exception as e:
+        print(f"❌ Error in generate_numbers: {str(e)}")
+        import traceback
+        print(f"🔍 Traceback: {traceback.format_exc()}")
         raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
 
 @app.get("/analyze")
@@ -266,5 +283,4 @@ async def health_check():
 if __name__ == "__main__":
     import uvicorn
     port = int(os.environ.get("PORT", 8000))
-    uvicorn.run(app, host="0.0.0.0", port=port)
     uvicorn.run(app, host="0.0.0.0", port=port)
