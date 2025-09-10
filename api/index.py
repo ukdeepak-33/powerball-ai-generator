@@ -10,6 +10,7 @@ from dotenv import load_dotenv
 import joblib
 from typing import List, Optional
 from pathlib import Path
+from collections import Counter
 
 # Load environment variables
 load_dotenv()
@@ -133,6 +134,20 @@ def predict_numbers(historical_data):
     
     return white_balls, powerball
 
+def fetch_2025_draws() -> List[dict]:
+    """Fetches only 2025 Powerball draws from Supabase"""
+    try:
+        response = supabase.table(SUPABASE_TABLE_NAME) \
+                          .select('*') \
+                          .gte('"Draw Date"', '2025-01-01') \
+                          .lte('"Draw Date"', '2025-12-31') \
+                          .order('"Draw Date"', desc=True) \
+                          .execute()
+        return response.data
+    except Exception as e:
+        print(f"Error fetching 2025 data: {e}")
+        return []
+
 def fetch_historical_draws(limit: int = 1000) -> List[dict]:
     """Fetches historical draws from Supabase"""
     try:
@@ -182,6 +197,38 @@ def prepare_features(draws_df: pd.DataFrame) -> pd.DataFrame:
     df['has_consecutive'] = df.apply(has_consecutive, axis=1)
     
     return df
+
+def get_2025_frequencies(white_balls, powerball, historical_data):
+    """Get frequency counts for numbers in 2025 only"""
+    if not historical_data:
+        return {
+            'white_ball_counts': {num: 0 for num in white_balls},
+            'powerball_count': 0,
+            'total_2025_draws': 0
+        }
+    
+    df = pd.DataFrame(historical_data)
+    number_columns = ['Number 1', 'Number 2', 'Number 3', 'Number 4', 'Number 5']
+    
+    # Count white ball frequencies in 2025
+    white_ball_counts = {}
+    all_white_balls = []
+    for _, draw in df.iterrows():
+        all_white_balls.extend([draw[col] for col in number_columns])
+    
+    white_ball_counter = Counter(all_white_balls)
+    for num in white_balls:
+        white_ball_counts[num] = white_ball_counter.get(num, 0)
+    
+    # Count powerball frequency in 2025
+    powerball_counts = Counter(df['Powerball'])
+    powerball_count = powerball_counts.get(powerball, 0)
+    
+    return {
+        'white_ball_counts': white_ball_counts,
+        'powerball_count': powerball_count,
+        'total_2025_draws': len(df)
+    }
 
 @app.get("/", response_class=HTMLResponse)
 async def read_root():
@@ -238,6 +285,10 @@ async def generate_numbers():
             raise HTTPException(status_code=404, detail="No historical data found")
         
         print(f"✅ Found {len(historical_data)} historical draws")
+        # Fetch 2025 data for frequency analysis
+        print("📅 Fetching 2025 data...")
+        data_2025 = fetch_2025_draws()
+        print(f"✅ Found {len(data_2025)} draws in 2025")
         
         df = pd.DataFrame(historical_data)
         print(f"📋 DataFrame columns: {list(df.columns)}")
@@ -256,20 +307,30 @@ async def generate_numbers():
         # Analyze the generated numbers
         group_a_count = sum(1 for num in white_balls if num in GROUP_A_NUMBERS)
         odd_count = sum(1 for num in white_balls if num % 2 == 1)
+
+        # Get 2025 frequencies
+        data_2025 = fetch_2025_draws()
+        freq_2025 = get_2025_frequencies(white_balls, powerball, data_2025)
         
         return JSONResponse({
-             "generated_numbers": {
-              "white_balls": [int(num) for num in white_balls],  # Convert to Python int
-              "powerball": int(powerball)  # Convert to Python int
-    },
-    "analysis": {
-        "group_a_count": int(group_a_count),  # Convert to Python int
-        "odd_even_ratio": f"{int(odd_count)} odd, {5 - int(odd_count)} even",
-        "total_numbers_generated": len(white_balls),
-        "message": "AI-generated numbers based on historical patterns"
-    }
-})
-        
+            "generated_numbers": {
+                "white_balls": [int(num) for num in white_balls],
+                "powerball": int(powerball)
+            },
+            "analysis": {
+                "group_a_count": int(group_a_count),
+                "odd_even_ratio": f"{int(odd_count)} odd, {5 - int(odd_count)} even",
+                "total_numbers_generated": len(white_balls),
+                "message": "AI-generated numbers based on historical patterns",
+                
+                # NEW: Add 2025 frequency data
+                "2025_frequency": {
+                    "white_balls": freq_2025['white_ball_counts'],
+                    "powerball": freq_2025['powerball_count'],
+                    "total_draws_2025": freq_2025['total_2025_draws']
+                }
+            }
+        })
     except Exception as e:
         print(f"❌ Error in generate_numbers: {str(e)}")
         import traceback
