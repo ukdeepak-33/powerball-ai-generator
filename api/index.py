@@ -205,6 +205,9 @@ from typing import Dict, List, Any, Set, Tuple
 # Add these pattern detection functions
 def detect_number_patterns(white_balls: List[int]) -> Dict[str, Any]:
     """Detect various patterns in the generated numbers"""
+    print(f"DEBUG: Input white_balls: {white_balls}, type: {type(white_balls)}")
+    print(f"DEBUG: First element: {white_balls[0] if white_balls else 'None'}, type: {type(white_balls[0]) if white_balls else 'None'}")
+    
     patterns = {
         'grouped_patterns': [],
         'tens_apart': [],
@@ -217,6 +220,7 @@ def detect_number_patterns(white_balls: List[int]) -> Dict[str, Any]:
         return patterns
     
     sorted_balls = sorted(white_balls)
+    print(f"DEBUG: Sorted balls: {sorted_balls}")
     
     # 1. Detect grouped patterns (same decade)
     decade_groups = defaultdict(list)
@@ -245,15 +249,20 @@ def detect_number_patterns(white_balls: List[int]) -> Dict[str, Any]:
                 patterns['same_last_digit'].append([num1, num2])
     
     # 3. Detect consecutive pairs
+    print("DEBUG: Checking for consecutive pairs...")
     for i in range(len(sorted_balls) - 1):
-        if sorted_balls[i + 1] - sorted_balls[i] == 1:
+        diff = sorted_balls[i + 1] - sorted_balls[i]
+        print(f"DEBUG: {sorted_balls[i]} vs {sorted_balls[i + 1]} = difference {diff}")
+        if diff == 1:
+            print(f"DEBUG: Found consecutive pair: {sorted_balls[i]}, {sorted_balls[i + 1]}")
             patterns['consecutive_pairs'].append([sorted_balls[i], sorted_balls[i + 1]])
     
     # 4. Detect repeating digits (11, 22, 33, etc.)
     repeating = [num for num in sorted_balls if num < 70 and num % 11 == 0]
     if repeating:
         patterns['repeating_digits'] = repeating
-    
+        
+    print(f"DEBUG: Final patterns: {patterns}")
     return patterns
 
 def analyze_pattern_history(patterns: Dict[str, Any], historical_data: List[dict]) -> Dict[str, Any]:
@@ -266,8 +275,12 @@ def analyze_pattern_history(patterns: Dict[str, Any], historical_data: List[dict
         'repeating_digits': []
     }
     
-    if not historical_data:
-        return pattern_history
+    if not white_balls or len(white_balls) < 2:
+        print("DEBUG: Not enough numbers for pattern detection")
+        return patterns
+    
+    sorted_balls = sorted(white_balls)
+    print(f"DEBUG: Sorted balls: {sorted_balls}")
     
     df = pd.DataFrame(historical_data)
     number_columns = ['Number 1', 'Number 2', 'Number 3', 'Number 4', 'Number 5']
