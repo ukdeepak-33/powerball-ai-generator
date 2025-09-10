@@ -111,6 +111,8 @@
                     <p>✅ <strong>${data.analysis.group_a_count} Group A numbers</strong> (high-frequency numbers)</p>
                     <p>🎯 <strong>${data.analysis.odd_even_ratio}</strong> odd/even ratio</p>
                     <p>📅 <strong>2025 Frequency:</strong> ${data.generated_numbers.white_balls.map((num, index) => num + ' (' + data.analysis['2025_frequency'].white_balls[num] + ')').join(' - ')} ⚡ ${data.generated_numbers.powerball} (${data.analysis['2025_frequency'].powerball})</p>
+                    <h3>🔍 Pattern Analysis:</h3>
+                    <p style="white-space: pre-line; font-size: 14px; line-height: 1.4;">${data.analysis.pattern_analysis}</p>
                     <p>📊 ${data.analysis.message}</p>
                 `;
                 
