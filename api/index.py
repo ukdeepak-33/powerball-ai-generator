@@ -1,6 +1,6 @@
 # api/index.py
 from fastapi import FastAPI, HTTPException
-from fastapi.middleware.cors import CORSMiddleware
+from fastapi.middleware.corners import CORSMiddleware
 from fastapi.responses import JSONResponse, HTMLResponse
 from supabase import create_client, Client
 import pandas as pd
@@ -8,9 +8,10 @@ import numpy as np
 import os
 from dotenv import load_dotenv
 import joblib
-from typing import List, Optional
+from typing import List, Optional, Dict, Any
 from pathlib import Path
 from collections import Counter
+from datetime import datetime
 
 # Load environment variables
 load_dotenv()
@@ -146,6 +147,11 @@ def fetch_historical_draws(limit: int = 1000) -> List[dict]:
 def fetch_2025_draws() -> List[dict]:
     """Fetches only 2025 Powerball draws from Supabase"""
     try:
+        # Get current year to handle edge cases
+        current_year = datetime.now().year
+        if current_year < 2025:
+            return []  # No 2025 data yet
+            
         response = supabase.table(SUPABASE_TABLE_NAME) \
                           .select('*') \
                           .gte('"Draw Date"', '2025-01-01') \
@@ -157,23 +163,29 @@ def fetch_2025_draws() -> List[dict]:
         print(f"Error fetching 2025 data: {e}")
         return []
 
-def analyze_2025_frequency(white_balls, historical_data):
+def analyze_2025_frequency(white_balls, historical_data) -> Dict[str, Any]:
     """Analyze generated numbers against 2025 data only"""
+    analysis = {
+        '2025_draws_count': 0,
+        'number_frequencies_2025': {},
+        'numbers_appeared_in_2025': [],
+        'numbers_not_appeared_in_2025': white_balls.copy(),  # Assume none appeared initially
+        'recently_drawn_numbers': [],
+        'cold_numbers_2025': [],
+        'hot_numbers_2025': [],
+        'analysis_available': False,
+        'message': 'No 2025 data available for analysis'
+    }
+    
+    if not historical_data or len(historical_data) == 0:
+        return analysis
+    
     df = pd.DataFrame(historical_data)
     number_columns = ['Number 1', 'Number 2', 'Number 3', 'Number 4', 'Number 5']
     
-    analysis = {
-        '2025_draws_count': len(df),
-        'number_frequencies_2025': {},
-        'numbers_appeared_in_2025': [],
-        'numbers_not_appeared_in_2025': [],
-        'recently_drawn_numbers': [],
-        'cold_numbers_2025': [],
-        'hot_numbers_2025': []
-    }
-    
-    if len(df) == 0:
-        return analysis
+    analysis['2025_draws_count'] = len(df)
+    analysis['analysis_available'] = True
+    analysis['message'] = f'Analyzed against {len(df)} 2025 draws'
     
     # Get all numbers drawn in 2025
     all_2025_numbers = []
@@ -188,11 +200,11 @@ def analyze_2025_frequency(white_balls, historical_data):
         count_2025 = number_counts_2025.get(num, 0)
         analysis['number_frequencies_2025'][num] = {
             'count': count_2025,
-            'percentage': f"{(count_2025 / total_draws_2025 * 100):.1f}%",
+            'percentage': f"{(count_2025 / total_draws_2025 * 100):.1f}%" if total_draws_2025 > 0 else "0.0%",
             'status': 'Hot' if count_2025 >= 3 else 'Warm' if count_2025 >= 1 else 'Cold'
         }
     
-    # Which numbers have appeared in 2025
+    # Update which numbers have appeared in 2025
     analysis['numbers_appeared_in_2025'] = [num for num in white_balls if number_counts_2025.get(num, 0) > 0]
     analysis['numbers_not_appeared_in_2025'] = [num for num in white_balls if number_counts_2025.get(num, 0) == 0]
     
@@ -219,106 +231,69 @@ def analyze_2025_frequency(white_balls, historical_data):
     
     return analysis
 
-def prepare_features(draws_df: pd.DataFrame) -> pd.DataFrame:
-    """Engineers features from raw draw data"""
-    white_ball_columns = ['Number 1', 'Number 2', 'Number 3', 'Number 4', 'Number 5']
-    
-    # Ensure we have the required columns
-    if not all(col in draws_df.columns for col in white_ball_columns):
-        available_cols = list(draws_df.columns)
-        raise ValueError(f"DataFrame missing required white ball columns. Available: {available_cols}")
-    
-    # Create a copy to avoid modifying the original
-    df = draws_df.copy()
-    
-    # Feature: Count of Group A numbers
-    df['group_a_count'] = df[white_ball_columns].map(lambda x: x in GROUP_A_NUMBERS).sum(axis=1)
-    
-    # Feature: Odd/Even count
-    df['odd_count'] = df[white_ball_columns].map(lambda x: x % 2 == 1).sum(axis=1)
-    
-    # Feature: Sum of white balls
-    df['sum_white'] = df[white_ball_columns].sum(axis=1)
-    
-    # Feature: Check for consecutive numbers
-    def has_consecutive(row):
-        sorted_nums = sorted([row[col] for col in white_ball_columns])
-        for i in range(len(sorted_nums)-1):
-            if sorted_nums[i+1] - sorted_nums[i] == 1:
-                return 1
-        return 0
-    
-    df['has_consecutive'] = df.apply(has_consecutive, axis=1)
-    
-    return df
-
 @app.get("/", response_class=HTMLResponse)
 async def read_root():
     """Serve the HTML homepage"""
-    index_path = Path("templates/index.html")
-    if index_path.exists():
-        with open(index_path, 'r') as f:
-            html_content = f.read()
-        return HTMLResponse(content=html_content)
-    else:
-        return HTMLResponse("""
-        <!DOCTYPE html>
-        <html>
-        <head>
-            <title>Powerball AI Generator</title>
-            <style>
-                body { font-family: Arial, sans-serif; max-width: 800px; margin: 0 auto; padding: 20px; }
-                h1 { color: #2c3e50; text-align: center; }
-                .btn { background: #e74c3c; color: white; padding: 15px 30px; border: none; border-radius: 5px; 
-                      font-size: 18px; cursor: pointer; display: block; margin: 20px auto; }
-                .btn:hover { background: #c0392b; }
-            </style>
-        </head>
-        <body>
-            <h1>🎰 Powerball AI Generator</h1>
-            <p style="text-align: center;">API is running successfully! 🚀</p>
-            <div style="text-align: center;">
-                <a href="/generate" style="text-decoration: none;">
-                    <button class="btn">Generate Numbers</button>
-                </a>
-                <a href="/analyze" style="text-decoration: none;">
-                    <button class="btn" style="background: #3498db;">Analyze Trends</button>
-                </a>
-                <a href="/docs" style="text-decoration: none;">
-                    <button class="btn" style="background: #27ae60;">API Documentation</button>
-                </a>
-            </div>
-            <p style="text-align: center; margin-top: 30px;">
-                Your AI-powered Powerball number generator is ready to use!
-            </p>
-        </body>
-        </html>
-        """)
+    return HTMLResponse("""
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <title>Powerball AI Generator</title>
+        <style>
+            body { font-family: Arial, sans-serif; max-width: 800px; margin: 0 auto; padding: 20px; }
+            h1 { color: #2c3e50; text-align: center; }
+            .btn { background: #e74c3c; color: white; padding: 15px 30px; border: none; border-radius: 5px; 
+                  font-size: 18px; cursor: pointer; display: block; margin: 20px auto; }
+            .btn:hover { background: #c0392b; }
+        </style>
+    </head>
+    <body>
+        <h1>🎰 Powerball AI Generator</h1>
+        <p style="text-align: center;">API is running successfully! 🚀</p>
+        <div style="text-align: center;">
+            <a href="/generate" style="text-decoration: none;">
+                <button class="btn">Generate Numbers</button>
+            </a>
+            <a href="/analyze" style="text-decoration: none;">
+                <button class="btn" style="background: #3498db;">Analyze Trends</button>
+            </a>
+            <a href="/docs" style="text-decoration: none;">
+                <button class="btn" style="background: #27ae60;">API Documentation</button>
+            </a>
+        </div>
+        <p style="text-align: center; margin-top: 30px;">
+            Your AI-powered Powerball number generator is ready to use!
+        </p>
+    </body>
+    </html>
+    """)
 
 @app.get("/generate")
 async def generate_numbers():
     """Generate Powerball numbers with 2025 analysis"""
     try:
-        # Fetch historical data for prediction
+        print("📊 Fetching historical data for prediction...")
         historical_data = fetch_historical_draws(limit=500)
         
         if not historical_data:
             raise HTTPException(status_code=404, detail="No historical data found")
         
-        # Fetch 2025 data for analysis
+        print("📅 Fetching 2025 data for analysis...")
         data_2025 = fetch_2025_draws()
+        print(f"✅ Found {len(data_2025)} draws in 2025")
         
-        # Generate numbers using ML model
+        print("🤖 Generating numbers using ML model...")
         white_balls, powerball = predict_numbers(historical_data)
+        print(f"✅ Generated numbers: {white_balls}, Powerball: {powerball}")
         
-        # Analyze against 2025 data
+        print("🔍 Analyzing against 2025 data...")
         analysis_2025 = analyze_2025_frequency(white_balls, data_2025)
         
         # Basic analysis
         group_a_count = sum(1 for num in white_balls if num in GROUP_A_NUMBERS)
         odd_count = sum(1 for num in white_balls if num % 2 == 1)
         
-        return JSONResponse({
+        response_data = {
             "generated_numbers": {
                 "white_balls": white_balls,
                 "powerball": powerball
@@ -330,42 +305,16 @@ async def generate_numbers():
             },
             "2025_analysis": analysis_2025,
             "message": "AI-generated numbers with 2025 frequency analysis"
-        })
+        }
+        
+        print("🎉 Successfully generated numbers with analysis!")
+        return JSONResponse(response_data)
         
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
-
-@app.get("/analyze")
-async def analyze_trends():
-    """Analyze historical trends"""
-    try:
-        historical_data = fetch_historical_draws(limit=1000)
-        if not historical_data:
-            raise HTTPException(status_code=404, detail="No historical data available for analysis")
-        
-        df = pd.DataFrame(historical_data)
-        engineered_data = prepare_features(df)
-        
-        # Calculate various statistics
-        avg_group_a = engineered_data['group_a_count'].mean()
-        consecutive_frequency = engineered_data['has_consecutive'].mean()
-        avg_odd_count = engineered_data['odd_count'].mean()
-        
-        return JSONResponse({
-            "historical_analysis": {
-                "total_draws_analyzed": len(engineered_data),
-                "average_group_a_numbers": round(avg_group_a, 2),
-                "consecutive_number_frequency": f"{consecutive_frequency * 100:.1f}%",
-                "average_odd_numbers": round(avg_odd_count, 2),
-                "data_timeframe": {
-                    "oldest_draw": df['Draw Date'].min() if 'Draw Date' in df.columns else "Unknown",
-                    "newest_draw": df['Draw Date'].max() if 'Draw Date' in df.columns else "Unknown"
-                }
-            }
-        })
-        
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Analysis error: {str(e)}")
+        print(f"❌ Error in generate_numbers: {str(e)}")
+        import traceback
+        print(f"🔍 Traceback: {traceback.format_exc()}")
+        raise HTTPException(status_code=500, detail=f"Error generating numbers: {str(e)}")
 
 @app.get("/health")
 async def health_check():
