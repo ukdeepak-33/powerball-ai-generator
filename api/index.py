@@ -272,50 +272,50 @@ def analyze_pattern_history(patterns: Dict[str, Any], historical_data: List[dict
     df = pd.DataFrame(historical_data)
     number_columns = ['Number 1', 'Number 2', 'Number 3', 'Number 4', 'Number 5']
     
-    # Analyze each pattern type
-    for pattern_type, pattern_list in patterns.items():
-        if not pattern_list:
-            continue
+   # Analyze each pattern type
+for pattern_type, pattern_list in patterns.items():
+    if not pattern_list:
+        continue
+        
+    for pattern in pattern_list:
+        history_info = {
+            'pattern': pattern,
+            'current_year_count': 0,
+            'total_count': 0,
+            'years_count': defaultdict(int)
+        }
+        
+        # Check each historical draw
+        for _, draw in df.iterrows():
+            draw_numbers = [draw[col] for col in number_columns]
+            draw_date = draw.get('Draw Date', '')
+            draw_year = draw_date[:4] if draw_date and isinstance(draw_date, str) else 'Unknown'
             
-        for pattern in pattern_list:
-            history_info = {
-                'pattern': pattern,
-                'current_year_count': 0,
-                'total_count': 0,
-                'years_count': defaultdict(int)
-            }
+            if pattern_type == 'grouped_patterns':
+                # Check if all numbers in the group appear together
+                if all(num in draw_numbers for num in pattern['numbers']):
+                    history_info['total_count'] += 1
+                    history_info['years_count'][draw_year] += 1
+                    if draw_year == '2025':
+                        history_info['current_year_count'] += 1
             
-            # Check each historical draw
-            for _, draw in df.iterrows():
-                draw_numbers = [draw[col] for col in number_columns]
-                draw_date = draw.get('Draw Date', '')
-                draw_year = draw_date[:4] if draw_date and isinstance(draw_date, str) else 'Unknown'
-                
-                if pattern_type == 'grouped_patterns':
-                    # Check if all numbers in the group appear together
-                    if all(num in draw_numbers for num in pattern['numbers']):
-                        history_info['total_count'] += 1
-                        history_info['years_count'][draw_year] += 1
-                        if draw_year == '2025':
-                            history_info['current_year_count'] += 1
-                
-                elif pattern_type in ['tens_apart', 'same_last_digit', 'consecutive_pairs']:
-                    # Check if both numbers appear together
-                    if all(num in draw_numbers for num in pattern):
-                        history_info['total_count'] += 1
-                        history_info['years_count'][draw_year] += 1
-                        if draw_year == '2025':
-                            history_info['current_year_count'] += 1
-                
-                elif pattern_type == 'repeating_digits':
-                    # Check if any repeating digit number appears
-                    if any(num in draw_numbers for num in pattern):
-                        history_info['total_count'] += 1
-                        history_info['years_count'][draw_year] += 1
-                        if draw_year == '2025':
-                            history_info['current_year_count'] += 1
+            elif pattern_type in ['tens_apart', 'same_last_digit', 'consecutive_pairs']:
+                # Check if both numbers appear together
+                if all(num in draw_numbers for num in pattern):
+                    history_info['total_count'] += 1
+                    history_info['years_count'][draw_year] += 1
+                    if draw_year == '2025':
+                        history_info['current_year_count'] += 1
             
-            pattern_history[pattern_type].append(history_info)
+            elif pattern_type == 'repeating_digits':
+                # Check if any repeating digit number appears
+                if any(num in draw_numbers for num in pattern):
+                    history_info['total_count'] += 1
+                    history_info['years_count'][draw_year] += 1
+                    if draw_year == '2025':
+                        history_info['current_year_count'] += 1
+        
+        pattern_history[pattern_type].append(history_info)
     
     return pattern_history
 
