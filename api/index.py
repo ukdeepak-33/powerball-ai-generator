@@ -78,31 +78,44 @@ def predict_numbers(historical_data):
             # Get prediction probabilities from model
             probabilities = MODEL.predict_proba([feature])
             
-            # Debug: Check the shape of probabilities
-            print(f"🔍 Probabilities shape: {[p.shape for p in probabilities] if hasattr(probabilities, '__iter__') else probabilities.shape}")
+            print(f"🔍 Probabilities shape: {[p.shape for p in probabilities] if hasattr(probabilities, '__iter__') else 'Unknown'}")
             
-            # Get the most likely numbers - FIXED VERSION
-            number_scores = np.zeros(69)
+            # Since the model output is unexpected, let's use a simpler approach
+            # Get the predicted classes directly
+            predictions = MODEL.predict([feature])
             
-            for i, proba in enumerate(probabilities):
-                # Handle different probability array shapes
-                if hasattr(proba, 'shape') and len(proba.shape) == 2:
-                    # Standard case: 2D array with [class_0_probs, class_1_probs]
-                    number_probs = proba[:, 1]  # Probability that number is present
-                elif hasattr(proba, 'shape') and len(proba.shape) == 3:
-                    # Some models return 3D array
-                    number_probs = proba[0, :, 1]  # First sample, all numbers, class 1
-                else:
-                    # Fallback: use the array as is
-                    number_probs = proba
+            # Flatten all predictions and get the most frequent numbers
+            all_predicted_numbers = []
+            for pred in predictions:
+                # Get indices where prediction is 1 (number is present)
+                predicted_indices = np.where(pred == 1)[0]
+                predicted_numbers = [idx + 1 for idx in predicted_indices]
+                all_predicted_numbers.extend(predicted_numbers)
+            
+            # If we got predictions, use the most frequent ones
+            if all_predicted_numbers:
+                from collections import Counter
+                number_counts = Counter(all_predicted_numbers)
+                most_common = number_counts.most_common(10)  # Top 10 most frequent
                 
-                # Add some randomness to avoid always same numbers
-                adjusted_probs = number_probs * np.random.uniform(0.8, 1.2, size=number_probs.shape)
-                number_scores += adjusted_probs
-            
-            # Get top 5 numbers with highest scores
-            top_5_indices = np.argsort(number_scores)[-5:]
-            white_balls = sorted([x + 1 for x in top_5_indices])  # Convert back to 1-69
+                # Select 5 unique numbers
+                selected_numbers = []
+                for num, count in most_common:
+                    if num not in selected_numbers and 1 <= num <= 69:
+                        selected_numbers.append(num)
+                    if len(selected_numbers) >= 5:
+                        break
+                
+                # If we didn't get 5 numbers, fill with random
+                while len(selected_numbers) < 5:
+                    random_num = np.random.randint(1, 70)
+                    if random_num not in selected_numbers:
+                        selected_numbers.append(random_num)
+                
+                white_balls = sorted(selected_numbers)
+            else:
+                # Fallback to random
+                white_balls = sorted(np.random.choice(range(1, 70), size=5, replace=False))
             
         except Exception as e:
             print(f"❌ ML prediction failed: {e}, using random fallback")
@@ -113,8 +126,12 @@ def predict_numbers(historical_data):
         white_balls = sorted(np.random.choice(range(1, 70), size=5, replace=False))
     
     powerball = np.random.randint(1, 27)  # Powerball is separate
+    
+    # Convert numpy types to Python native types for JSON serialization
+    white_balls = [int(num) for num in white_balls]
+    powerball = int(powerball)
+    
     return white_balls, powerball
-
 
 def fetch_historical_draws(limit: int = 1000) -> List[dict]:
     """Fetches historical draws from Supabase"""
@@ -241,17 +258,17 @@ async def generate_numbers():
         odd_count = sum(1 for num in white_balls if num % 2 == 1)
         
         return JSONResponse({
-            "generated_numbers": {
-                "white_balls": white_balls,
-                "powerball": powerball
-            },
-            "analysis": {
-                "group_a_count": group_a_count,
-                "odd_even_ratio": f"{odd_count} odd, {5 - odd_count} even",
-                "total_numbers_generated": len(white_balls),
-                "message": "AI-generated numbers based on historical patterns"
-            }
-        })
+             "generated_numbers": {
+              "white_balls": [int(num) for num in white_balls],  # Convert to Python int
+              "powerball": int(powerball)  # Convert to Python int
+    },
+    "analysis": {
+        "group_a_count": int(group_a_count),  # Convert to Python int
+        "odd_even_ratio": f"{int(odd_count)} odd, {5 - int(odd_count)} even",
+        "total_numbers_generated": len(white_balls),
+        "message": "AI-generated numbers based on historical patterns"
+    }
+})
         
     except Exception as e:
         print(f"❌ Error in generate_numbers: {str(e)}")
