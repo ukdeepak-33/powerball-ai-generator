@@ -2,6 +2,8 @@
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, HTMLResponse
+from collections import defaultdict, Counter
+from typing import Dict, List, Any, Set, Tuple
 from supabase import create_client, Client
 import pandas as pd
 import numpy as np
@@ -198,10 +200,6 @@ def prepare_features(draws_df: pd.DataFrame) -> pd.DataFrame:
     
     return df
 
-# Add to your imports
-from collections import defaultdict, Counter
-from typing import Dict, List, Any, Set, Tuple
-
 # Add these pattern detection functions
 def detect_number_patterns(white_balls: List[int]) -> Dict[str, Any]:
     """Detect various patterns in the generated numbers"""
@@ -304,9 +302,10 @@ def analyze_pattern_history(patterns: Dict[str, Any], historical_data: List[dict
             draw_date = draw.get('Draw Date', '')
             draw_year = draw_date[:4] if draw_date and isinstance(draw_date, str) else 'Unknown'
             
-            if pattern_type == 'grouped_patterns':
-                # Check if all numbers in the group appear together
-                if all(num in draw_numbers for num in pattern['numbers']):
+            try:
+                if pattern_type == 'grouped_patterns':
+                 # Check if all numbers in the group appear together
+                if all(num in draw_numbers for num in pattern.get('numbers',[])):
                     history_info['total_count'] += 1
                     history_info['years_count'][draw_year] += 1
                     if draw_year == '2025':
@@ -314,7 +313,7 @@ def analyze_pattern_history(patterns: Dict[str, Any], historical_data: List[dict
             
             elif pattern_type in ['tens_apart', 'same_last_digit', 'consecutive_pairs']:
                 # Check if both numbers appear together
-                if all(num in draw_numbers for num in pattern):
+                if isinstance(pattern, list) and all(num in draw_numbers for num in pattern):
                     history_info['total_count'] += 1
                     history_info['years_count'][draw_year] += 1
                     if draw_year == '2025':
@@ -322,11 +321,15 @@ def analyze_pattern_history(patterns: Dict[str, Any], historical_data: List[dict
             
             elif pattern_type == 'repeating_digits':
                 # Check if any repeating digit number appears
-                if any(num in draw_numbers for num in pattern):
+                if isinstance(pattern, list) and any(num in draw_numbers for num in pattern):
                     history_info['total_count'] += 1
                     history_info['years_count'][draw_year] += 1
                     if draw_year == '2025':
                         history_info['current_year_count'] += 1
+
+        except Exception as e:
+                    print(f"Error analyzing pattern {pattern_type}: {pattern}, error: {e}")
+                    continue
         
         pattern_history[pattern_type].append(history_info)
     
@@ -342,25 +345,31 @@ def format_pattern_analysis(pattern_history: Dict[str, Any]) -> str:
             
         for pattern_info in patterns:
             pattern = pattern_info['pattern']
+            pattern_type = pattern_info['pattern_type']
             current_count = pattern_info['current_year_count']
             total_count = pattern_info['total_count']
+            years_count = pattern_info['years_count']
             
             if pattern_type == 'grouped_patterns':
                 pattern_str = f"Grouped ({pattern['decade_range']}): {', '.join(map(str, pattern['numbers']))}"
             elif pattern_type == 'repeating_digits':
                 pattern_str = f"Repeating Digits: {', '.join(map(str, pattern))}"
             else:
-                pattern_str = f"{pattern_type.replace('_', ' ').title()}: {', '.join(map(str, pattern))}"
+                readable_type = pattern_type.replace('_', ' ').title()
+                pattern_str = f"{readable_type}: {', '.join(map(str, pattern))}"
             
             # Format years count for display
             years_info = []
             for year, count in pattern_info['years_count'].items():
                 if year != 'Unknown' and year != '2025':  # Exclude current year and unknown
                     years_info.append(f"{year}:{count}")
+                    years_info.sort(reverse=True)
             
             current_year_status = "Yes" if current_count > 0 else "No"
-            current_year_info = f"2025: {current_year_status} ({current_count} times)" if current_count > 0 else "2025: No"
-            
+            current_year_info = f"2025: {current_year_status} ({current_count} times)" 
+            if current_count > 0:
+                current_year_info += f" ({current_count} times)"
+            if total_count > 0:
             years_summary = f" | Total: {total_count} times"
             if years_info:
                 years_summary += f" ({', '.join(years_info)})"
