@@ -10,6 +10,7 @@ from dotenv import load_dotenv
 import joblib
 from typing import List, Optional
 from pathlib import Path
+from collections import Counter
 
 # Load environment variables
 load_dotenv()
@@ -133,6 +134,20 @@ def predict_numbers(historical_data):
     
     return white_balls, powerball
 
+def fetch_2025_draws() -> List[dict]:
+    """Fetches only 2025 Powerball draws from Supabase"""
+    try:
+        response = supabase.table(SUPABASE_TABLE_NAME) \
+                          .select('*') \
+                          .gte('"Draw Date"', '2025-01-01') \
+                          .lte('"Draw Date"', '2025-12-31') \
+                          .order('"Draw Date"', desc=True) \
+                          .execute()
+        return response.data
+    except Exception as e:
+        print(f"Error fetching 2025 data: {e}")
+        return []
+
 def fetch_historical_draws(limit: int = 1000) -> List[dict]:
     """Fetches historical draws from Supabase"""
     try:
@@ -186,7 +201,11 @@ def prepare_features(draws_df: pd.DataFrame) -> pd.DataFrame:
 def get_2025_frequencies(white_balls, powerball, historical_data):
     """Get frequency counts for numbers in 2025 only"""
     if not historical_data:
-        return None
+        return {
+            'white_ball_counts': {num: 0 for num in white_balls},
+            'powerball_count': 0,
+            'total_2025_draws': 0
+        }
     
     df = pd.DataFrame(historical_data)
     number_columns = ['Number 1', 'Number 2', 'Number 3', 'Number 4', 'Number 5']
@@ -266,6 +285,10 @@ async def generate_numbers():
             raise HTTPException(status_code=404, detail="No historical data found")
         
         print(f"✅ Found {len(historical_data)} historical draws")
+        # Fetch 2025 data for frequency analysis
+        print("📅 Fetching 2025 data...")
+        data_2025 = fetch_2025_draws()
+        print(f"✅ Found {len(data_2025)} draws in 2025")
         
         df = pd.DataFrame(historical_data)
         print(f"📋 DataFrame columns: {list(df.columns)}")
@@ -299,6 +322,7 @@ async def generate_numbers():
                 "odd_even_ratio": f"{int(odd_count)} odd, {5 - int(odd_count)} even",
                 "total_numbers_generated": len(white_balls),
                 "message": "AI-generated numbers based on historical patterns",
+                
                 # NEW: Add 2025 frequency data
                 "2025_frequency": {
                     "white_balls": freq_2025['white_ball_counts'],
