@@ -1,7 +1,7 @@
 # api/index.py
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import FastAPI, HTTPException, Request, Form
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse, HTMLResponse
+from fastapi.responses import JSONResponse, HTMLResponse, RedirectResponse
 from supabase import create_client, Client
 import pandas as pd
 import numpy as np
@@ -54,6 +54,51 @@ except FileNotFoundError:
 # ... [Keep all your existing functions: predict_numbers, fetch_historical_draws, 
 # fetch_2025_draws, analyze_2025_frequency, check_historical_matches] 
 # They remain exactly the same as in the previous version ...
+
+def generate_numbers_internal():
+    """Internal function to generate numbers (same logic as before)"""
+    # Fetch historical data for prediction and analysis
+    historical_data = fetch_historical_draws(limit=1000)
+    
+    if not historical_data:
+        raise HTTPException(status_code=404, detail="No historical data found")
+    
+    # Fetch 2025 data for frequency display
+    data_2025 = fetch_2025_draws()
+    
+    # Generate numbers using ML model (based on historical data)
+    white_balls, powerball = predict_numbers(historical_data)
+    
+    # Ensure no exact historical matches
+    historical_check = check_historical_matches(white_balls, powerball, historical_data)
+    
+    # If exact match found, generate new numbers (safety check)
+    max_attempts = 10
+    attempt = 0
+    while historical_check['exact_matches'] > 0 and attempt < max_attempts:
+        print(f"⚠ Exact match found, generating new numbers (attempt {attempt + 1})")
+        white_balls, powerball = predict_numbers(historical_data)
+        historical_check = check_historical_matches(white_balls, powerball, historical_data)
+        attempt += 1
+    
+    # Analyze against 2025 data for frequency display
+    analysis_2025 = analyze_2025_frequency(white_balls, data_2025)
+    
+    # Basic analysis
+    group_a_count = sum(1 for num in white_balls if num in GROUP_A_NUMBERS)
+    odd_count = sum(1 for num in white_balls if num % 2 == 1)
+    
+    return {
+        "white_balls": white_balls,
+        "powerball": powerball,
+        "basic_analysis": {
+            "group_a_numbers": group_a_count,
+            "odd_even_ratio": f"{odd_count} odd, {5 - odd_count} even",
+            "total_numbers": len(white_balls)
+        },
+        "2025_frequency": analysis_2025,
+        "historical_safety_check": historical_check
+    }
 
 @app.get("/", response_class=HTMLResponse)
 async def read_root():
@@ -171,6 +216,14 @@ async def read_root():
             .result-container {
                 display: none;
             }
+            .error {
+                color: #e74c3c;
+                text-align: center;
+                padding: 10px;
+                background: #ffeaea;
+                border-radius: 5px;
+                margin: 10px 0;
+            }
         </style>
     </head>
     <body>
@@ -178,7 +231,9 @@ async def read_root():
             <h1>🎰 Powerball AI Generator</h1>
             <p class="subtitle">AI-powered number generation with historical analysis</p>
             
-            <button class="btn" onclick="generateNumbers()">Generate AI Numbers</button>
+            <form action="/generate-ui" method="POST">
+                <button type="submit" class="btn">Generate AI Numbers</button>
+            </form>
             
             <div id="loading" class="loading">
                 <p>🤖 AI is analyzing historical patterns...</p>
@@ -205,63 +260,52 @@ async def read_root():
         </div>
 
         <script>
-            async function generateNumbers() {
-                const loadingDiv = document.getElementById('loading');
-                const resultDiv = document.getElementById('result-container');
-                const numbersDisplay = document.getElementById('numbers-display');
+            // Check if we have result data from server-side rendering
+            const resultData = JSON.parse(document.getElementById('result-data')?.textContent || 'null');
+            
+            if (resultData) {
+                displayResults(resultData);
+            }
+            
+            function displayResults(data) {
+                // Display numbers
+                document.getElementById('numbers-display').innerHTML = 
+                    `${data.white_balls.join(', ')} <span class="powerball">⚡ Powerball: ${data.powerball}</span>`;
                 
-                // Show loading, hide previous results
-                loadingDiv.style.display = 'block';
-                resultDiv.style.display = 'none';
+                // Display basic analysis
+                document.getElementById('basic-analysis').innerHTML = `
+                    <p><strong>Group A Numbers:</strong> ${data.basic_analysis.group_a_numbers}</p>
+                    <p><strong>Odd/Even Ratio:</strong> ${data.basic_analysis.odd_even_ratio}</p>
+                    <p><strong>Total Numbers:</strong> ${data.basic_analysis.total_numbers}</p>
+                `;
                 
-                try {
-                    const response = await fetch('/generate');
-                    const data = await response.json();
-                    
-                    // Display numbers
-                    numbersDisplay.innerHTML = data.numbers.replace('âš¡', '⚡');
-                    
-                    // Display basic analysis
-                    document.getElementById('basic-analysis').innerHTML = `
-                        <p><strong>Group A Numbers:</strong> ${data.basic_analysis.group_a_numbers}</p>
-                        <p><strong>Odd/Even Ratio:</strong> ${data.basic_analysis.odd_even_ratio}</p>
-                        <p><strong>Total Numbers:</strong> ${data.basic_analysis.total_numbers}</p>
-                    `;
-                    
-                    // Display 2025 frequency analysis
-                    let freqHtml = `<p><strong>2025 Draws Analyzed:</strong> ${data['2025_frequency']['2025_draws_count']}</p>`;
-                    for (const [num, info] of Object.entries(data['2025_frequency']['number_frequencies_2025'])) {
-                        freqHtml += `<span class="number-badge ${info.status.toLowerCase()}">${num}: ${info.count} (${info.percentage})</span>`;
-                    }
-                    document.getElementById('2025-analysis').innerHTML = freqHtml;
-                    
-                    // Display historical analysis
-                    let histHtml = `
-                        <p><strong>Exact Matches Found:</strong> <span class="${data.historical_safety_check.exact_matches_found > 0 ? 'match-bad' : 'match-good'} number-badge">${data.historical_safety_check.exact_matches_found}</span></p>
-                        <p><strong>Maximum Partial Matches:</strong> <span class="${data.historical_safety_check.max_partial_matches >= 4 ? 'match-warning' : 'match-good'} number-badge">${data.historical_safety_check.max_partial_matches}</span></p>
-                    `;
-                    
-                    if (data.historical_safety_check.recent_significant_match) {
-                        const match = data.historical_safety_check.recent_significant_match;
-                        histHtml += `
-                            <p><strong>Most Recent Significant Match:</strong></p>
-                            <p>Date: ${match.draw_date}, Matches: ${match.match_count}</p>
-                            <p>Common Numbers: ${match.common_numbers.join(', ')}</p>
-                            <p>Powerball Match: ${match.powerball_match ? 'Yes' : 'No'}</p>
-                        `;
-                    }
-                    
-                    document.getElementById('historical-analysis').innerHTML = histHtml;
-                    
-                    // Show results, hide loading
-                    resultDiv.style.display = 'block';
-                    loadingDiv.style.display = 'none';
-                    
-                } catch (error) {
-                    loadingDiv.style.display = 'none';
-                    alert('Error generating numbers. Please try again.');
-                    console.error('Error:', error);
+                // Display 2025 frequency analysis
+                let freqHtml = `<p><strong>2025 Draws Analyzed:</strong> ${data['2025_frequency']['2025_draws_count']}</p>`;
+                for (const [num, info] of Object.entries(data['2025_frequency']['number_frequencies_2025'])) {
+                    freqHtml += `<span class="number-badge ${info.status.toLowerCase()}">${num}: ${info.count} (${info.percentage})</span>`;
                 }
+                document.getElementById('2025-analysis').innerHTML = freqHtml;
+                
+                // Display historical analysis
+                let histHtml = `
+                    <p><strong>Exact Matches Found:</strong> <span class="${data.historical_safety_check.exact_matches_found > 0 ? 'match-bad' : 'match-good'} number-badge">${data.historical_safety_check.exact_matches_found}</span></p>
+                    <p><strong>Maximum Partial Matches:</strong> <span class="${data.historical_safety_check.max_partial_matches >= 4 ? 'match-warning' : 'match-good'} number-badge">${data.historical_safety_check.max_partial_matches}</span></p>
+                `;
+                
+                if (data.historical_safety_check.recent_significant_match) {
+                    const match = data.historical_safety_check.recent_significant_match;
+                    histHtml += `
+                        <p><strong>Most Recent Significant Match:</strong></p>
+                        <p>Date: ${match.draw_date}, Matches: ${match.match_count}</p>
+                        <p>Common Numbers: ${match.common_numbers.join(', ')}</p>
+                        <p>Powerball Match: ${match.powerball_match ? 'Yes' : 'No'}</p>
+                    `;
+                }
+                
+                document.getElementById('historical-analysis').innerHTML = histHtml;
+                
+                // Show results
+                document.getElementById('result-container').style.display = 'block';
             }
             
             function toggleAnalysis(id) {
@@ -274,8 +318,111 @@ async def read_root():
     """
     return HTMLResponse(content=html_content)
 
-# ... [Keep all your existing API endpoints: /generate, /check-numbers, /health] 
-# They remain exactly the same as in the previous version ...
+@app.post("/generate-ui", response_class=HTMLResponse)
+async def generate_numbers_ui(request: Request):
+    """Generate numbers and display in UI"""
+    try:
+        # Generate numbers using internal function
+        result = generate_numbers_internal()
+        
+        # Render the HTML with the results
+        html_content = f"""
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <title>Powerball AI Generator</title>
+            <style>
+                /* Same CSS as above */
+                body {{ font-family: Arial, sans-serif; max-width: 900px; margin: 0 auto; padding: 20px; background-color: #f5f5f5; }}
+                .container {{ background: white; padding: 30px; border-radius: 15px; box-shadow: 0 4px 20px rgba(0,0,0,0.1); }}
+                h1 {{ color: #2c3e50; text-align: center; margin-bottom: 10px; }}
+                /* ... include all the same CSS styles ... */
+            </style>
+        </head>
+        <body>
+            <div class="container">
+                <h1>🎰 Powerball AI Generator</h1>
+                <p class="subtitle">AI-powered number generation with historical analysis</p>
+                
+                <form action="/generate-ui" method="POST">
+                    <button type="submit" class="btn">Generate New Numbers</button>
+                </form>
+                
+                <div id="result-container" class="result-container" style="display: block;">
+                    <div class="numbers-display">
+                        {', '.join(map(str, result['white_balls']))} <span class="powerball">⚡ Powerball: {result['powerball']}</span>
+                    </div>
+                    
+                    <button class="analysis-toggle" onclick="toggleAnalysis('basic-analysis')">
+                        📊 Basic Analysis
+                    </button>
+                    <div id="basic-analysis" class="analysis-content">
+                        <p><strong>Group A Numbers:</strong> {result['basic_analysis']['group_a_numbers']}</p>
+                        <p><strong>Odd/Even Ratio:</strong> {result['basic_analysis']['odd_even_ratio']}</p>
+                        <p><strong>Total Numbers:</strong> {result['basic_analysis']['total_numbers']}</p>
+                    </div>
+                    
+                    <button class="analysis-toggle" onclick="toggleAnalysis('2025-analysis')">
+                        📅 2025 Frequency Analysis
+                    </button>
+                    <div id="2025-analysis" class="analysis-content">
+                        <p><strong>2025 Draws Analyzed:</strong> {result['2025_frequency']['2025_draws_count']}</p>
+                        {"".join([f'<span class="number-badge {info["status"].lower()}">{num}: {info["count"]} ({info["percentage"]})</span>' 
+                                 for num, info in result['2025_frequency']['number_frequencies_2025'].items()])}
+                    </div>
+                    
+                    <button class="analysis-toggle" onclick="toggleAnalysis('historical-analysis')">
+                        📈 Historical Match Check
+                    </button>
+                    <div id="historical-analysis" class="analysis-content">
+                        <p><strong>Exact Matches Found:</strong> <span class="{'match-bad' if result['historical_safety_check']['exact_matches_found'] > 0 else 'match-good'} number-badge">{result['historical_safety_check']['exact_matches_found']}</span></p>
+                        <p><strong>Maximum Partial Matches:</strong> <span class="{'match-warning' if result['historical_safety_check']['max_partial_matches'] >= 4 else 'match-good'} number-badge">{result['historical_safety_check']['max_partial_matches']}</span></p>
+                        {f'<p><strong>Most Recent Significant Match:</strong></p><p>Date: {result["historical_safety_check"]["recent_significant_match"]["draw_date"]}, Matches: {result["historical_safety_check"]["recent_significant_match"]["match_count"]}</p><p>Common Numbers: {", ".join(map(str, result["historical_safety_check"]["recent_significant_match"]["common_numbers"]))}</p><p>Powerball Match: {"Yes" if result["historical_safety_check"]["recent_significant_match"]["powerball_match"] else "No"}</p>' 
+                         if result['historical_safety_check']['recent_significant_match'] else ''}
+                    </div>
+                </div>
+            </div>
+
+            <script>
+                function toggleAnalysis(id) {{
+                    const content = document.getElementById(id);
+                    content.style.display = content.style.display === 'none' ? 'block' : 'none';
+                }}
+            </script>
+        </body>
+        </html>
+        """
+        
+        return HTMLResponse(content=html_content)
+        
+    except Exception as e:
+        error_html = f"""
+        <div class="container">
+            <h1>🎰 Powerball AI Generator</h1>
+            <div class="error">
+                <h3>Error Generating Numbers</h3>
+                <p>{str(e)}</p>
+            </div>
+            <form action="/generate-ui" method="POST">
+                <button type="submit" class="btn">Try Again</button>
+            </form>
+        </div>
+        """
+        return HTMLResponse(content=error_html)
+
+# Keep the API endpoint for other clients
+@app.get("/generate-api")
+async def generate_numbers_api():
+    """API endpoint for generating numbers (for other clients)"""
+    try:
+        result = generate_numbers_internal()
+        return JSONResponse(result)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error generating numbers: {str(e)}")
+
+@app.get("/health")
+async def health_check():
+    return {"status": "healthy", "message": "Service is running normally"}
 
 if __name__ == "__main__":
     import uvicorn
