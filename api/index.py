@@ -386,7 +386,7 @@ def format_pattern_analysis(pattern_history: Dict[str, Any]) -> str:
             if current_count > 0:
                 current_year_info += f" ({current_count} times)"
             if total_count > 0:
-            years_summary = f" | Total: {total_count} times"
+                years_summary = f" | Total: {total_count} times"
             if years_info:
                 years_summary += f" ({', '.join(years_info)})"
             
