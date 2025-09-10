@@ -147,11 +147,6 @@ def fetch_historical_draws(limit: int = 1000) -> List[dict]:
 def fetch_2025_draws() -> List[dict]:
     """Fetches only 2025 Powerball draws from Supabase"""
     try:
-        # Get current year to handle edge cases
-        current_year = datetime.now().year
-        if current_year < 2025:
-            return []  # No 2025 data yet
-            
         response = supabase.table(SUPABASE_TABLE_NAME) \
                           .select('*') \
                           .gte('"Draw Date"', '2025-01-01') \
@@ -168,11 +163,6 @@ def analyze_2025_frequency(white_balls, historical_data) -> Dict[str, Any]:
     analysis = {
         '2025_draws_count': 0,
         'number_frequencies_2025': {},
-        'numbers_appeared_in_2025': [],
-        'numbers_not_appeared_in_2025': white_balls.copy(),  # Assume none appeared initially
-        'recently_drawn_numbers': [],
-        'cold_numbers_2025': [],
-        'hot_numbers_2025': [],
         'analysis_available': False,
         'message': 'No 2025 data available for analysis'
     }
@@ -204,30 +194,59 @@ def analyze_2025_frequency(white_balls, historical_data) -> Dict[str, Any]:
             'status': 'Hot' if count_2025 >= 3 else 'Warm' if count_2025 >= 1 else 'Cold'
         }
     
-    # Update which numbers have appeared in 2025
-    analysis['numbers_appeared_in_2025'] = [num for num in white_balls if number_counts_2025.get(num, 0) > 0]
-    analysis['numbers_not_appeared_in_2025'] = [num for num in white_balls if number_counts_2025.get(num, 0) == 0]
+    return analysis
+
+def check_historical_matches(white_balls, powerball, historical_data) -> Dict[str, Any]:
+    """Check how many numbers match historical draws"""
+    analysis = {
+        'exact_matches': 0,
+        'partial_matches': [],
+        'max_matches_found': 0,
+        'most_recent_match': None,
+        'match_analysis': []
+    }
     
-    # Hot numbers (drawn 3+ times in 2025)
-    analysis['hot_numbers_2025'] = [num for num in white_balls if number_counts_2025.get(num, 0) >= 3]
+    if not historical_data:
+        return analysis
     
-    # Recently drawn numbers (last 5 draws of 2025)
-    if len(df) >= 5:
-        recent_draws = df.head(5)  # Most recent 5 draws
-        recent_numbers = []
-        for _, draw in recent_draws.iterrows():
-            recent_numbers.extend([draw[col] for col in number_columns])
+    df = pd.DataFrame(historical_data)
+    number_columns = ['Number 1', 'Number 2', 'Number 3', 'Number 4', 'Number 5']
+    
+    generated_set = set(white_balls)
+    
+    for _, draw in df.iterrows():
+        draw_numbers = [draw[col] for col in number_columns]
+        draw_set = set(draw_numbers)
         
-        analysis['recently_drawn_numbers'] = [num for num in white_balls if num in recent_numbers]
-    
-    # Cold numbers (not drawn in last 10 draws of 2025)
-    if len(df) >= 10:
-        recent_10_draws = df.head(10)
-        recent_10_numbers = []
-        for _, draw in recent_10_draws.iterrows():
-            recent_10_numbers.extend([draw[col] for col in number_columns])
+        common_numbers = generated_set & draw_set
+        match_count = len(common_numbers)
         
-        analysis['cold_numbers_2025'] = [num for num in white_balls if num not in recent_10_numbers]
+        if match_count > analysis['max_matches_found']:
+            analysis['max_matches_found'] = match_count
+        
+        if match_count >= 3:  # Only track significant matches
+            match_info = {
+                'draw_date': draw['Draw Date'],
+                'match_count': match_count,
+                'common_numbers': list(common_numbers),
+                'powerball_match': powerball == draw['Powerball'],
+                'exact_match': (match_count == 5) and (powerball == draw['Powerball'])
+            }
+            
+            analysis['partial_matches'].append(match_info)
+            
+            if match_info['exact_match']:
+                analysis['exact_matches'] += 1
+            
+            # Track most recent significant match
+            if analysis['most_recent_match'] is None or draw['Draw Date'] > analysis['most_recent_match']['draw_date']:
+                analysis['most_recent_match'] = match_info
+    
+    # Sort partial matches by most recent first
+    analysis['partial_matches'].sort(key=lambda x: x['draw_date'], reverse=True)
+    
+    # Keep only top 5 most recent significant matches
+    analysis['partial_matches'] = analysis['partial_matches'][:5]
     
     return analysis
 
@@ -270,23 +289,33 @@ async def read_root():
 
 @app.get("/generate")
 async def generate_numbers():
-    """Generate Powerball numbers with 2025 analysis"""
+    """Generate Powerball numbers with analysis"""
     try:
-        print("📊 Fetching historical data for prediction...")
-        historical_data = fetch_historical_draws(limit=500)
+        # Fetch historical data for prediction and analysis
+        historical_data = fetch_historical_draws(limit=1000)
         
         if not historical_data:
             raise HTTPException(status_code=404, detail="No historical data found")
         
-        print("📅 Fetching 2025 data for analysis...")
+        # Fetch 2025 data for frequency display
         data_2025 = fetch_2025_draws()
-        print(f"✅ Found {len(data_2025)} draws in 2025")
         
-        print("🤖 Generating numbers using ML model...")
+        # Generate numbers using ML model (based on historical data)
         white_balls, powerball = predict_numbers(historical_data)
-        print(f"✅ Generated numbers: {white_balls}, Powerball: {powerball}")
         
-        print("🔍 Analyzing against 2025 data...")
+        # Ensure no exact historical matches
+        historical_check = check_historical_matches(white_balls, powerball, historical_data)
+        
+        # If exact match found, generate new numbers (safety check)
+        max_attempts = 10
+        attempt = 0
+        while historical_check['exact_matches'] > 0 and attempt < max_attempts:
+            print(f"⚠ Exact match found, generating new numbers (attempt {attempt + 1})")
+            white_balls, powerball = predict_numbers(historical_data)
+            historical_check = check_historical_matches(white_balls, powerball, historical_data)
+            attempt += 1
+        
+        # Analyze against 2025 data for frequency display
         analysis_2025 = analyze_2025_frequency(white_balls, data_2025)
         
         # Basic analysis
@@ -294,27 +323,73 @@ async def generate_numbers():
         odd_count = sum(1 for num in white_balls if num % 2 == 1)
         
         response_data = {
-            "generated_numbers": {
-                "white_balls": white_balls,
-                "powerball": powerball
-            },
+            "numbers": f"{', '.join(map(str, white_balls))} ⚡ Powerball: {powerball}",
             "basic_analysis": {
-                "group_a_count": group_a_count,
+                "group_a_numbers": group_a_count,
                 "odd_even_ratio": f"{odd_count} odd, {5 - odd_count} even",
                 "total_numbers": len(white_balls)
             },
-            "2025_analysis": analysis_2025,
+            "2025_frequency": analysis_2025,
+            "historical_safety_check": {
+                "exact_matches_found": historical_check['exact_matches'],
+                "max_partial_matches": historical_check['max_matches_found'],
+                "recent_significant_match": historical_check['most_recent_match']
+            },
             "message": "AI-generated numbers with 2025 frequency analysis"
         }
         
-        print("🎉 Successfully generated numbers with analysis!")
         return JSONResponse(response_data)
         
     except Exception as e:
-        print(f"❌ Error in generate_numbers: {str(e)}")
-        import traceback
-        print(f"🔍 Traceback: {traceback.format_exc()}")
         raise HTTPException(status_code=500, detail=f"Error generating numbers: {str(e)}")
+
+@app.get("/check-numbers")
+async def check_numbers(numbers: str, powerball: int):
+    """Check any numbers against historical data"""
+    try:
+        # Parse the input numbers
+        white_balls = [int(num.strip()) for num in numbers.split(',')]
+        
+        if len(white_balls) != 5:
+            raise HTTPException(status_code=400, detail="Please provide exactly 5 white ball numbers")
+        
+        if not (1 <= powerball <= 26):
+            raise HTTPException(status_code=400, detail="Powerball must be between 1 and 26")
+        
+        # Fetch historical data
+        historical_data = fetch_historical_draws(limit=1000)
+        
+        if not historical_data:
+            raise HTTPException(status_code=404, detail="No historical data found")
+        
+        # Check matches
+        match_analysis = check_historical_matches(white_balls, powerball, historical_data)
+        
+        # Fetch 2025 data for frequency
+        data_2025 = fetch_2025_draws()
+        frequency_analysis = analyze_2025_frequency(white_balls, data_2025)
+        
+        # Basic analysis
+        group_a_count = sum(1 for num in white_balls if num in GROUP_A_NUMBERS)
+        odd_count = sum(1 for num in white_balls if num % 2 == 1)
+        
+        response_data = {
+            "checked_numbers": f"{', '.join(map(str, white_balls))} ⚡ Powerball: {powerball}",
+            "basic_analysis": {
+                "group_a_numbers": group_a_count,
+                "odd_even_ratio": f"{odd_count} odd, {5 - odd_count} even"
+            },
+            "2025_frequency": frequency_analysis,
+            "historical_matches": match_analysis,
+            "message": "Number analysis complete"
+        }
+        
+        return JSONResponse(response_data)
+        
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid number format. Please use format: 1,2,3,4,5")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error analyzing numbers: {str(e)}")
 
 @app.get("/health")
 async def health_check():
