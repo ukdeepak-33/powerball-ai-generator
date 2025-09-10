@@ -265,6 +265,7 @@ def detect_number_patterns(white_balls: List[int]) -> Dict[str, Any]:
 
 def analyze_pattern_history(patterns: Dict[str, Any], historical_data: List[dict]) -> Dict[str, Any]:
     """Analyze historical occurrence of detected patterns"""
+    print("🔍 Starting pattern history analysis...")
     pattern_history = {
         'grouped_patterns': [],
         'tens_apart': [],
@@ -273,67 +274,82 @@ def analyze_pattern_history(patterns: Dict[str, Any], historical_data: List[dict
         'repeating_digits': []
     }
     
-    if not white_balls or len(white_balls) < 2:
-        print("DEBUG: Not enough numbers for pattern detection")
-        return patterns
+    if not historical_data:
+        print("⚠ No historical data for pattern analysis")
+        return pattern_history
     
-    sorted_balls = sorted(white_balls)
-    print(f"DEBUG: Sorted balls: {sorted_balls}")
-    
-    df = pd.DataFrame(historical_data)
-    number_columns = ['Number 1', 'Number 2', 'Number 3', 'Number 4', 'Number 5']
-    
-       # Analyze each pattern type
-    for pattern_type, pattern_list in patterns.items():
-        if not pattern_list:
-            continue
+    try:
+        df = pd.DataFrame(historical_data)
+        print(f"✅ Created DataFrame with {len(df)} rows")
         
-    for pattern in pattern_list:
-        history_info = {
-            'pattern': pattern,
-            'current_year_count': 0,
-            'total_count': 0,
-            'years_count': defaultdict(int)
-        }
+        number_columns = ['Number 1', 'Number 2', 'Number 3', 'Number 4', 'Number 5']
+        print(f"📊 Using number columns: {number_columns}")
         
-        # Check each historical draw
-        for _, draw in df.iterrows():
-            draw_numbers = [draw[col] for col in number_columns]
-            draw_date = draw.get('Draw Date', '')
-            draw_year = draw_date[:4] if draw_date and isinstance(draw_date, str) else 'Unknown'
+        # Analyze each pattern type
+        for pattern_type, pattern_list in patterns.items():
+            print(f"🔎 Analyzing {pattern_type}: {pattern_list}")
             
-            try:
-                if pattern_type == 'grouped_patterns':
-                 # Check if all numbers in the group appear together
-                if all(num in draw_numbers for num in pattern.get('numbers',[])):
-                    history_info['total_count'] += 1
-                    history_info['years_count'][draw_year] += 1
-                    if draw_year == '2025':
-                        history_info['current_year_count'] += 1
-            
-            elif pattern_type in ['tens_apart', 'same_last_digit', 'consecutive_pairs']:
-                # Check if both numbers appear together
-                if isinstance(pattern, list) and all(num in draw_numbers for num in pattern):
-                    history_info['total_count'] += 1
-                    history_info['years_count'][draw_year] += 1
-                    if draw_year == '2025':
-                        history_info['current_year_count'] += 1
-            
-            elif pattern_type == 'repeating_digits':
-                # Check if any repeating digit number appears
-                if isinstance(pattern, list) and any(num in draw_numbers for num in pattern):
-                    history_info['total_count'] += 1
-                    history_info['years_count'][draw_year] += 1
-                    if draw_year == '2025':
-                        history_info['current_year_count'] += 1
-
-        except Exception as e:
-                    print(f"Error analyzing pattern {pattern_type}: {pattern}, error: {e}")
-                    continue
+            if not pattern_list:
+                print(f"⚠ No patterns of type {pattern_type}")
+                continue
+                
+            for pattern in pattern_list:
+                print(f"📋 Processing pattern: {pattern} (type: {type(pattern)})")
+                
+                history_info = {
+                    'pattern': pattern,
+                    'pattern_type': pattern_type,
+                    'current_year_count': 0,
+                    'total_count': 0,
+                    'years_count': defaultdict(int)
+                }
+                
+                # Check each historical draw
+                for index, draw in df.iterrows():
+                    try:
+                        draw_numbers = [draw[col] for col in number_columns]
+                        draw_date = draw.get('Draw Date', '')
+                        draw_year = draw_date[:4] if draw_date and isinstance(draw_date, str) else 'Unknown'
+                        
+                        if pattern_type == 'grouped_patterns':
+                            # Check if all numbers in the group appear together
+                            if all(num in draw_numbers for num in pattern.get('numbers', [])):
+                                history_info['total_count'] += 1
+                                history_info['years_count'][draw_year] += 1
+                                if draw_year == '2025':
+                                    history_info['current_year_count'] += 1
+                        
+                        elif pattern_type in ['tens_apart', 'same_last_digit', 'consecutive_pairs']:
+                            # Check if both numbers appear together
+                            if isinstance(pattern, list) and all(num in draw_numbers for num in pattern):
+                                history_info['total_count'] += 1
+                                history_info['years_count'][draw_year] += 1
+                                if draw_year == '2025':
+                                    history_info['current_year_count'] += 1
+                        
+                        elif pattern_type == 'repeating_digits':
+                            # Check if any repeating digit number appears
+                            if isinstance(pattern, list) and any(num in draw_numbers for num in pattern):
+                                history_info['total_count'] += 1
+                                history_info['years_count'][draw_year] += 1
+                                if draw_year == '2025':
+                                    history_info['current_year_count'] += 1
+                    
+                    except Exception as e:
+                        print(f"❌ Error processing draw {index}: {e}")
+                        continue
+                
+                pattern_history[pattern_type].append(history_info)
+                print(f"✅ Completed analysis for {pattern_type} pattern: {pattern}")
         
-        pattern_history[pattern_type].append(history_info)
-    
-    return pattern_history
+        print("🎉 Pattern history analysis completed successfully")
+        return pattern_history
+        
+    except Exception as e:
+        print(f"❌ Critical error in analyze_pattern_history: {e}")
+        import traceback
+        print(f"🔍 Traceback: {traceback.format_exc()}")
+        return pattern_history
 
 def format_pattern_analysis(pattern_history: Dict[str, Any]) -> str:
     """Format pattern analysis for display"""
@@ -563,6 +579,42 @@ async def analyze_trends():
         
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Analysis error: {str(e)}")
+
+@app.get("/test-patterns")
+async def test_patterns():
+    """Test endpoint for pattern analysis"""
+    try:
+        # Test with sample data
+        test_white_balls = [2, 13, 33, 40, 59]
+        print(f"🧪 Testing with numbers: {test_white_balls}")
+        
+        # Detect patterns
+        patterns = detect_number_patterns(test_white_balls)
+        print(f"✅ Patterns detected: {patterns}")
+        
+        # Get historical data for analysis
+        historical_data = fetch_historical_draws(limit=100)
+        print(f"📊 Historical data: {len(historical_data)} records")
+        
+        # Analyze pattern history
+        pattern_history = analyze_pattern_history(patterns, historical_data)
+        print(f"✅ Pattern history: {pattern_history}")
+        
+        # Format analysis
+        pattern_analysis = format_pattern_analysis(pattern_history)
+        print(f"✅ Formatted analysis: {pattern_analysis}")
+        
+        return {
+            "test_numbers": test_white_balls,
+            "patterns_detected": patterns,
+            "pattern_history": pattern_history,
+            "formatted_analysis": pattern_analysis
+        }
+        
+    except Exception as e:
+        print(f"❌ Error in test-patterns: {str(e)}")
+        import traceback
+        return {"error": str(e), "traceback": traceback.format_exc()}
 
 @app.get("/health")
 async def health_check():
