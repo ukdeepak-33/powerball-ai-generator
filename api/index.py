@@ -269,64 +269,6 @@ def generate_numbers_internal():
     historical_check = check_historical_matches(white_balls, powerball, historical_data)
     
     # COMPATIBILITY FIX: Ensure both key names work
-    if 'exact_matches' in historical_check and 'exact_matches_found' not in historical_check:
-        historical_check['exact_matches_found'] = historical_check['exact_matches']
-    elif 'exact_matches_found' in historical_check and 'exact_matches' not in historical_check:
-        historical_check['exact_matches'] = historical_check['exact_matches_found']
-    
-    # If exact match found, generate new numbers (safety check)
-    max_attempts = 10
-    attempt = 0
-    while historical_check.get('exact_matches', 0) > 0 and attempt < max_attempts:
-        print(f"⚠ Exact match found, generating new numbers (attempt {attempt + 1})")
-        white_balls, powerball = predict_numbers(historical_data)
-        historical_check = check_historical_matches(white_balls, powerball, historical_data)
-        
-        # Apply compatibility fix again
-        if 'exact_matches' in historical_check and 'exact_matches_found' not in historical_check:
-            historical_check['exact_matches_found'] = historical_check['exact_matches']
-        elif 'exact_matches_found' in historical_check and 'exact_matches' not in historical_check:
-            historical_check['exact_matches'] = historical_check['exact_matches_found']
-            
-        attempt += 1
-    
-    # Analyze against 2025 data for frequency display
-    analysis_2025 = analyze_2025_frequency(white_balls, data_2025)
-    
-    # Basic analysis
-    group_a_count = sum(1 for num in white_balls if num in GROUP_A_NUMBERS)
-    odd_count = sum(1 for num in white_balls if num % 2 == 1)
-    
-    return {
-        "white_balls": white_balls,
-        "powerball": powerball,
-        "basic_analysis": {
-            "group_a_numbers": group_a_count,
-            "odd_even_ratio": f"{odd_count} odd, {5 - odd_count} even",
-            "total_numbers": len(white_balls)
-        },
-        "2025_frequency": analysis_2025,
-        "historical_safety_check": historical_check
-    }
-
-def generate_numbers_internal():
-    """Internal function to generate numbers with compatibility fix"""
-    # Fetch historical data for prediction and analysis
-    historical_data = fetch_historical_draws(limit=1000)
-    
-    if not historical_data:
-        raise Exception("No historical data found")
-    
-    # Fetch 2025 data for frequency display
-    data_2025 = fetch_2025_draws()
-    
-    # Generate numbers using ML model (based on historical data)
-    white_balls, powerball = predict_numbers(historical_data)
-    
-    # Ensure no exact historical matches
-    historical_check = check_historical_matches(white_balls, powerball, historical_data)
-    
-    # COMPATIBILITY FIX: Ensure both key names work
     historical_check['exact_matches_found'] = historical_check['exact_matches']
     
     # If exact match found, generate new numbers (safety check)
@@ -357,8 +299,6 @@ def generate_numbers_internal():
         "2025_frequency": analysis_2025,
         "historical_safety_check": historical_check
     }
-
-
 # ======== UI ENDPOINTS ========
 @app.get("/", response_class=HTMLResponse)
 async def read_root():
