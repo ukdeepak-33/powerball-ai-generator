@@ -198,6 +198,59 @@ def analyze_2025_frequency(white_balls, historical_data) -> Dict[str, Any]:
     
     return analysis
 
+def check_historical_matches(white_balls, powerball, historical_data) -> Dict[str, Any]:
+    """Check how many numbers match historical draws"""
+    analysis = {
+        'exact_matches': 0,
+        'partial_matches': [],
+        'max_matches_found': 0,
+        'most_recent_match': None,
+    }
+    
+    if not historical_data:
+        return analysis
+    
+    df = pd.DataFrame(historical_data)
+    number_columns = ['Number 1', 'Number 2', 'Number 3', 'Number 4', 'Number 5']
+    
+    generated_set = set(white_balls)
+    
+    for _, draw in df.iterrows():
+        draw_numbers = [draw[col] for col in number_columns]
+        draw_set = set(draw_numbers)
+        
+        common_numbers = generated_set & draw_set
+        match_count = len(common_numbers)
+        
+        if match_count > analysis['max_matches_found']:
+            analysis['max_matches_found'] = match_count
+        
+        if match_count >= 3:  # Only track significant matches
+            match_info = {
+                'draw_date': draw['Draw Date'],
+                'match_count': match_count,
+                'common_numbers': list(common_numbers),
+                'powerball_match': powerball == draw['Powerball'],
+                'exact_match': (match_count == 5) and (powerball == draw['Powerball'])
+            }
+            
+            analysis['partial_matches'].append(match_info)
+            
+            if match_info['exact_match']:
+                analysis['exact_matches'] += 1
+            
+            # Track most recent significant match
+            if analysis['most_recent_match'] is None or draw['Draw Date'] > analysis['most_recent_match']['draw_date']:
+                analysis['most_recent_match'] = match_info
+    
+    # Sort partial matches by most recent first
+    analysis['partial_matches'].sort(key=lambda x: x['draw_date'], reverse=True)
+    
+    # Keep only top 5 most recent significant matches
+    analysis['partial_matches'] = analysis['partial_matches'][:5]
+    
+    return analysis
+
 def generate_numbers_internal():
     """Internal function to generate numbers with compatibility fix"""
     # Fetch historical data for prediction and analysis
@@ -255,10 +308,9 @@ def generate_numbers_internal():
         "2025_frequency": analysis_2025,
         "historical_safety_check": historical_check
     }
-# ======== UI ENDPOINTS ========
 
 def generate_numbers_internal():
-    """Internal function to generate numbers"""
+    """Internal function to generate numbers with compatibility fix"""
     # Fetch historical data for prediction and analysis
     historical_data = fetch_historical_draws(limit=1000)
     
@@ -274,6 +326,9 @@ def generate_numbers_internal():
     # Ensure no exact historical matches
     historical_check = check_historical_matches(white_balls, powerball, historical_data)
     
+    # COMPATIBILITY FIX: Ensure both key names work
+    historical_check['exact_matches_found'] = historical_check['exact_matches']
+    
     # If exact match found, generate new numbers (safety check)
     max_attempts = 10
     attempt = 0
@@ -281,6 +336,7 @@ def generate_numbers_internal():
         print(f"⚠ Exact match found, generating new numbers (attempt {attempt + 1})")
         white_balls, powerball = predict_numbers(historical_data)
         historical_check = check_historical_matches(white_balls, powerball, historical_data)
+        historical_check['exact_matches_found'] = historical_check['exact_matches']
         attempt += 1
     
     # Analyze against 2025 data for frequency display
@@ -302,6 +358,8 @@ def generate_numbers_internal():
         "historical_safety_check": historical_check
     }
 
+
+# ======== UI ENDPOINTS ========
 @app.get("/", response_class=HTMLResponse)
 async def read_root():
     """Serve the main HTML interface"""
