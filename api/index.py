@@ -352,11 +352,14 @@ def analyze_pattern_history(patterns: Dict[str, Any], historical_data: List[dict
         return pattern_history
 
 def format_pattern_analysis(pattern_history: Dict[str, Any]) -> str:
-    """Format pattern analysis for display"""
+    """Format pattern analysis for display in the desired format"""
     analysis_lines = []
     
     for pattern_type, patterns in pattern_history.items():
         if not patterns:
+            # Add "None found" for empty pattern types
+            if pattern_type == 'consecutive_pairs':
+                analysis_lines.append("• Consecutive Pairs: None found")
             continue
             
         for pattern_info in patterns:
@@ -366,31 +369,44 @@ def format_pattern_analysis(pattern_history: Dict[str, Any]) -> str:
             total_count = pattern_info['total_count']
             years_count = pattern_info['years_count']
             
+            # Format the pattern description
             if pattern_type == 'grouped_patterns':
                 pattern_str = f"Grouped ({pattern['decade_range']}): {', '.join(map(str, pattern['numbers']))}"
             elif pattern_type == 'repeating_digits':
-                pattern_str = f"Repeating Digits: {', '.join(map(str, pattern))}"
+                # Handle both list and single integer cases
+                if isinstance(pattern, list):
+                    pattern_str = f"Repeating Digits: {', '.join(map(str, pattern))}"
+                else:
+                    pattern_str = f"Repeating Digits: {pattern}"
             else:
+                # Convert pattern type to readable format
                 readable_type = pattern_type.replace('_', ' ').title()
                 pattern_str = f"{readable_type}: {', '.join(map(str, pattern))}"
             
-            # Format years count for display
+            # Format years information
             years_info = []
-            for year, count in pattern_info['years_count'].items():
+            for year, count in years_count.items():
                 if year != 'Unknown' and year != '2025':  # Exclude current year and unknown
                     years_info.append(f"{year}:{count}")
-                    years_info.sort(reverse=True)
             
+            # Sort years chronologically (newest first)
+            years_info.sort(reverse=True)
+            
+            # Format current year status
             current_year_status = "Yes" if current_count > 0 else "No"
-            current_year_info = f"2025: {current_year_status} ({current_count} times)" 
+            current_year_info = f"2025: {current_year_status}"
             if current_count > 0:
                 current_year_info += f" ({current_count} times)"
+            
+            # Build the final output line
             if total_count > 0:
                 years_summary = f" | Total: {total_count} times"
-            if years_info:
-                years_summary += f" ({', '.join(years_info)})"
-            
-            analysis_lines.append(f"• {pattern_str} → {current_year_info}{years_summary}")
+                if years_info:
+                    years_summary += f" ({', '.join(years_info)})"
+                
+                analysis_lines.append(f"• {pattern_str} → {current_year_info}{years_summary}")
+            else:
+                analysis_lines.append(f"• {pattern_str} → Never occurred historically")
     
     if not analysis_lines:
         return "• No significant patterns detected"
