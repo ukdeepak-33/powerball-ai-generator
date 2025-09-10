@@ -572,7 +572,7 @@ async def generate_numbers_ui(request: Request):
                 </button>
                 <div id="2025-analysis" class="analysis-content">
                     <p><strong>2025 Draws Analyzed:</strong> {result['2025_frequency']['2025_draws_count']}</p>
-                    {"".join([f'<span class="number-badge {info["status"].lower()}">{num}: {info["count"]} ({info["percentage"]})</span>' 
+                    {"".join([f'<span class="number-badge {info["status"].lower()}">{num}: {info["count"]} ({info["percentage"]})</span>'
                              for num, info in result['2025_frequency']['number_frequencies_2025'].items()])}
                 </div>
                 
@@ -580,7 +580,7 @@ async def generate_numbers_ui(request: Request):
                     📈 Historical Match Check
                 </button>
                 <div id="historical-analysis" class="analysis-content">
-                    <p><strong>Exact Matches Found:</strong> <span class="{'match-bad' if result['historical_safety_check']['exact_matches'] > 0 else 'match-good'} number-badge">{result['historical_safety_check']['exact_matches']}</span></p>'
+                    <p><strong>Exact Matches Found:</strong> <span class="{'match-bad' if result['historical_safety_check']['exact_matches'] > 0 else 'match-good'} number-badge">{result['historical_safety_check']['exact_matches']}</span></p>
                     <p><strong>Maximum Partial Matches:</strong> <span class="{'match-warning' if result['historical_safety_check']['max_partial_matches'] >= 4 else 'match-good'} number-badge">{result['historical_safety_check']['max_partial_matches']}</span></p>
                     {f'<p><strong>Most Recent Significant Match:</strong></p><p>Date: {result["historical_safety_check"]["recent_significant_match"]["draw_date"]}, Matches: {result["historical_safety_check"]["recent_significant_match"]["match_count"]}</p><p>Common Numbers: {", ".join(map(str, result["historical_safety_check"]["recent_significant_match"]["common_numbers"]))}</p><p>Powerball Match: {"Yes" if result["historical_safety_check"]["recent_significant_match"]["powerball_match"] else "No"}</p>' 
                      if result['historical_safety_check']['recent_significant_match'] else ''}
