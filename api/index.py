@@ -273,7 +273,7 @@ def analyze_pattern_history(patterns: Dict[str, Any], historical_data: List[dict
     number_columns = ['Number 1', 'Number 2', 'Number 3', 'Number 4', 'Number 5']
     
    # Analyze each pattern type
-for pattern_type, pattern_list in patterns.items():
+    for pattern_type, pattern_list in patterns.items():
     if not pattern_list:
         continue
         
