@@ -274,8 +274,8 @@ def analyze_pattern_history(patterns: Dict[str, Any], historical_data: List[dict
     
        # Analyze each pattern type
     for pattern_type, pattern_list in patterns.items():
-    if not pattern_list:
-        continue
+        if not pattern_list:
+            continue
         
     for pattern in pattern_list:
         history_info = {
