@@ -1,20 +1,27 @@
 # api/index.py
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, FileResponse, HTMLResponse
+from fastapi.staticfiles import StaticFiles
+from fastapi.templating import Jinja2Templates
+from supabase import create_client, Client
 import pandas as pd
 import numpy as np
-from supabase import create_client, Client
 import os
 from dotenv import load_dotenv
 import joblib
 from typing import List, Optional
+from pathlib import Path
 
 # Load environment variables
 load_dotenv()
 
 # Initialize FastAPI app
 app = FastAPI(title="Powerball AI Generator", version="1.0.0")
+
+# Serve static files and templates
+app.mount("/static", StaticFiles(directory="static"), name="static")
+templates = Jinja2Templates(directory="templates")
 
 # Add CORS middleware
 app.add_middleware(
@@ -31,27 +38,23 @@ GROUP_A_NUMBERS = {3, 5, 6, 7, 9, 11, 15, 16, 18, 21, 23, 24, 27, 31, 32, 33, 36
 # --- Supabase Configuration ---
 SUPABASE_URL = os.environ.get("SUPABASE_URL", "https://yksxzbbcoitehdmsxqex.supabase.co")
 SUPABASE_ANON_KEY = os.environ.get("SUPABASE_ANON_KEY", "YOUR_ACTUAL_SUPABASE_ANON_KEY_GOES_HERE")
-SUPABASE_SERVICE_KEY = os.environ.get("SUPABASE_SERVICE_KEY", "YOUR_ACTUAL_SUPABASE_SERVICE_ROLE_KEY_GOES_HERE")
 
 SUPABASE_TABLE_NAME = 'powerball_draws'
-GENERATED_NUMBERS_TABLE_NAME = 'generated_powerball_numbers'
 
 if not SUPABASE_URL or not SUPABASE_ANON_KEY:
     raise ValueError("SUPABASE_URL and SUPABASE_ANON_KEY must be set in environment variables")
 
-
-
 # Initialize Supabase client
 supabase: Client = create_client(SUPABASE_URL, SUPABASE_ANON_KEY)
+
+# Load the trained model
 try:
-    # Load the trained model
     MODEL = joblib.load('trained_model.joblib')
     print("✅ Trained ML model loaded successfully!")
 except FileNotFoundError:
     print("⚠ No pre-trained model found. Using random generation as fallback")
     MODEL = None
 
-# Add this function to use the ML model for predictions
 def predict_numbers(historical_data):
     """Use ML model to predict numbers based on historical data"""
     if MODEL is None:
@@ -60,11 +63,11 @@ def predict_numbers(historical_data):
         powerball = np.random.randint(1, 27)
         return white_balls, powerball
     
-    # Prepare features from historical data (same as training)
+    # Prepare features from historical data
     df = pd.DataFrame(historical_data)
     number_columns = ['Number 1', 'Number 2', 'Number 3', 'Number 4', 'Number 5']
     
-    # Use the last 5 draws to make prediction (same as training)
+    # Use the last 5 draws to make prediction
     if len(df) >= 5:
         recent_draws = df.iloc[-5:]
         
@@ -109,17 +112,18 @@ def fetch_historical_draws(limit: int = 1000) -> List[dict]:
     try:
         response = supabase.table(SUPABASE_TABLE_NAME) \
                           .select('*') \
-                          .order('draw_date', desc=True) \
+                          .order('"Draw Date"', desc=True) \
                           .limit(limit) \
                           .execute()
         return response.data
     except Exception as e:
         print(f"Error fetching data from Supabase: {e}")
         return []
-        
+
 def prepare_features(draws_df: pd.DataFrame) -> pd.DataFrame:
     """Engineers features from raw draw data"""
-    white_ball_columns = ['num1', 'num2', 'num3', 'num4', 'num5']
+    # Use your actual column names from Supabase
+    white_ball_columns = ['Number 1', 'Number 2', 'Number 3', 'Number 4', 'Number 5']
     
     # Ensure we have the required columns
     if not all(col in draws_df.columns for col in white_ball_columns):
@@ -149,9 +153,21 @@ def prepare_features(draws_df: pd.DataFrame) -> pd.DataFrame:
     
     return df
 
-@app.get("/")
-async def root():
-    return {"message": "Powerball AI Generator API is running!", "status": "healthy"}
+@app.get("/", response_class=HTMLResponse)
+async def read_root(request: Request):
+    """Serve the HTML homepage"""
+    index_path = Path("templates/index.html")
+    if index_path.exists():
+        return templates.TemplateResponse("index.html", {"request": request})
+    else:
+        return HTMLResponse("""
+        <html>
+            <body>
+                <h1>Powerball AI Generator</h1>
+                <p>API is running! Visit <a href="/generate">/generate</a> for numbers or <a href="/docs">/docs</a> for API documentation.</p>
+            </body>
+        </html>
+        """)
 
 @app.get("/generate")
 async def generate_numbers():
@@ -167,7 +183,7 @@ async def generate_numbers():
         # Prepare features
         engineered_data = prepare_features(df)
         
-        # For now, generate random numbers (Replace with your ML model later)
+        # Generate numbers using ML model
         white_balls, powerball = predict_numbers(historical_data)
         
         # Analyze the generated numbers
@@ -183,7 +199,7 @@ async def generate_numbers():
                 "group_a_count": group_a_count,
                 "odd_even_ratio": f"{odd_count} odd, {5 - odd_count} even",
                 "total_numbers_generated": len(white_balls),
-                "message": "Numbers generated successfully. Integrate ML model for smarter predictions."
+                "message": "AI-generated numbers based on historical patterns"
             }
         })
         
@@ -213,8 +229,8 @@ async def analyze_trends():
                 "consecutive_number_frequency": f"{consecutive_frequency * 100:.1f}%",
                 "average_odd_numbers": round(avg_odd_count, 2),
                 "data_timeframe": {
-                    "oldest_draw": df['draw_date'].min(),
-                    "newest_draw": df['draw_date'].max()
+                    "oldest_draw": df['Draw Date'].min() if 'Draw Date' in df.columns else "Unknown",
+                    "newest_draw": df['Draw Date'].max() if 'Draw Date' in df.columns else "Unknown"
                 }
             }
         })
@@ -222,13 +238,11 @@ async def analyze_trends():
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Analysis error: {str(e)}")
 
-# Health check endpoint for Render
 @app.get("/health")
 async def health_check():
     return {"status": "healthy", "message": "Service is running normally"}
 
-# Add this to the VERY BOTTOM of your api/index.py file
 if __name__ == "__main__":
     import uvicorn
-    port = int(os.environ.get("PORT", 8000))  # Use Render's PORT or default to 8000
+    port = int(os.environ.get("PORT", 8000))
     uvicorn.run(app, host="0.0.0.0", port=port)
