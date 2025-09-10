@@ -1,6 +1,6 @@
 # api/index.py
 from fastapi import FastAPI, HTTPException
-from fastapi.middleware.corners import CORSMiddleware
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, HTMLResponse
 from supabase import create_client, Client
 import pandas as pd
