@@ -198,60 +198,63 @@ def analyze_2025_frequency(white_balls, historical_data) -> Dict[str, Any]:
     
     return analysis
 
-def check_historical_matches(white_balls, powerball, historical_data) -> Dict[str, Any]:
-    """Check how many numbers match historical draws"""
-    analysis = {
-        'exact_matches_found': 0,  # ← CHANGED from 'exact_matches'
-        'partial_matches': [],
-        'max_matches_found': 0,
-        'most_recent_match': None,
-        'match_analysis': []
-    }
+def generate_numbers_internal():
+    """Internal function to generate numbers with compatibility fix"""
+    # Fetch historical data for prediction and analysis
+    historical_data = fetch_historical_draws(limit=1000)
     
     if not historical_data:
-        return analysis
+        raise Exception("No historical data found")
     
-    df = pd.DataFrame(historical_data)
-    number_columns = ['Number 1', 'Number 2', 'Number 3', 'Number 4', 'Number 5']
+    # Fetch 2025 data for frequency display
+    data_2025 = fetch_2025_draws()
     
-    generated_set = set(white_balls)
+    # Generate numbers using ML model (based on historical data)
+    white_balls, powerball = predict_numbers(historical_data)
     
-    for _, draw in df.iterrows():
-        draw_numbers = [draw[col] for col in number_columns]
-        draw_set = set(draw_numbers)
+    # Ensure no exact historical matches
+    historical_check = check_historical_matches(white_balls, powerball, historical_data)
+    
+    # COMPATIBILITY FIX: Ensure both key names work
+    if 'exact_matches' in historical_check and 'exact_matches_found' not in historical_check:
+        historical_check['exact_matches_found'] = historical_check['exact_matches']
+    elif 'exact_matches_found' in historical_check and 'exact_matches' not in historical_check:
+        historical_check['exact_matches'] = historical_check['exact_matches_found']
+    
+    # If exact match found, generate new numbers (safety check)
+    max_attempts = 10
+    attempt = 0
+    while historical_check.get('exact_matches', 0) > 0 and attempt < max_attempts:
+        print(f"⚠ Exact match found, generating new numbers (attempt {attempt + 1})")
+        white_balls, powerball = predict_numbers(historical_data)
+        historical_check = check_historical_matches(white_balls, powerball, historical_data)
         
-        common_numbers = generated_set & draw_set
-        match_count = len(common_numbers)
-        
-        if match_count > analysis['max_matches_found']:
-            analysis['max_matches_found'] = match_count
-        
-        if match_count >= 3:  # Only track significant matches
-            match_info = {
-                'draw_date': draw['Draw Date'],
-                'match_count': match_count,
-                'common_numbers': list(common_numbers),
-                'powerball_match': powerball == draw['Powerball'],
-                'exact_match': (match_count == 5) and (powerball == draw['Powerball'])
-            }
+        # Apply compatibility fix again
+        if 'exact_matches' in historical_check and 'exact_matches_found' not in historical_check:
+            historical_check['exact_matches_found'] = historical_check['exact_matches']
+        elif 'exact_matches_found' in historical_check and 'exact_matches' not in historical_check:
+            historical_check['exact_matches'] = historical_check['exact_matches_found']
             
-            analysis['partial_matches'].append(match_info)
-            
-            if match_info['exact_match']:
-                analysis['exact_matches_found'] += 1  # ← CHANGED here too
-            
-            # Track most recent significant match
-            if analysis['most_recent_match'] is None or draw['Draw Date'] > analysis['most_recent_match']['draw_date']:
-                analysis['most_recent_match'] = match_info
+        attempt += 1
     
-    # Sort partial matches by most recent first
-    analysis['partial_matches'].sort(key=lambda x: x['draw_date'], reverse=True)
+    # Analyze against 2025 data for frequency display
+    analysis_2025 = analyze_2025_frequency(white_balls, data_2025)
     
-    # Keep only top 5 most recent significant matches
-    analysis['partial_matches'] = analysis['partial_matches'][:5]
+    # Basic analysis
+    group_a_count = sum(1 for num in white_balls if num in GROUP_A_NUMBERS)
+    odd_count = sum(1 for num in white_balls if num % 2 == 1)
     
-    return analysis
-
+    return {
+        "white_balls": white_balls,
+        "powerball": powerball,
+        "basic_analysis": {
+            "group_a_numbers": group_a_count,
+            "odd_even_ratio": f"{odd_count} odd, {5 - odd_count} even",
+            "total_numbers": len(white_balls)
+        },
+        "2025_frequency": analysis_2025,
+        "historical_safety_check": historical_check
+    }
 # ======== UI ENDPOINTS ========
 
 def generate_numbers_internal():
@@ -572,7 +575,7 @@ async def generate_numbers_ui(request: Request):
                 </button>
                 <div id="2025-analysis" class="analysis-content">
                     <p><strong>2025 Draws Analyzed:</strong> {result['2025_frequency']['2025_draws_count']}</p>
-                    {"".join([f'<span class="number-badge {info["status"].lower()}">{num}: {info["count"]} ({info["percentage"]})</span>'
+                    {"".join([f'<span class="number-badge {info["status"].lower()}">{num}: {info["count"]} ({info["percentage"]})</span>
                              for num, info in result['2025_frequency']['number_frequencies_2025'].items()])}
                 </div>
                 
@@ -580,9 +583,9 @@ async def generate_numbers_ui(request: Request):
                     📈 Historical Match Check
                 </button>
                 <div id="historical-analysis" class="analysis-content">
-                    <p><strong>Exact Matches Found:</strong> <span class="{'match-bad' if result['historical_safety_check']['exact_matches'] > 0 else 'match-good'} number-badge">{result['historical_safety_check']['exact_matches']}</span></p>
+                    <p><strong>Exact Matches Found:</strong> <span class="{'match-bad' if result['historical_safety_check'].get('exact_matches_found', result['historical_safety_check'].get('exact_matches', 0)) > 0 else 'match-good'} number-badge">{result['historical_safety_check'].get('exact_matches_found', result['historical_safety_check'].get('exact_matches', 0))}</span></p>
                     <p><strong>Maximum Partial Matches:</strong> <span class="{'match-warning' if result['historical_safety_check']['max_partial_matches'] >= 4 else 'match-good'} number-badge">{result['historical_safety_check']['max_partial_matches']}</span></p>
-                    {f'<p><strong>Most Recent Significant Match:</strong></p><p>Date: {result["historical_safety_check"]["recent_significant_match"]["draw_date"]}, Matches: {result["historical_safety_check"]["recent_significant_match"]["match_count"]}</p><p>Common Numbers: {", ".join(map(str, result["historical_safety_check"]["recent_significant_match"]["common_numbers"]))}</p><p>Powerball Match: {"Yes" if result["historical_safety_check"]["recent_significant_match"]["powerball_match"] else "No"}</p>' 
+                    {f'<p><strong>Most Recent Significant Match:</strong></p><p>Date: {result["historical_safety_check"]["recent_significant_match"]["draw_date"]}, Matches: {result["historical_safety_check"]["recent_significant_match"]["match_count"]}</p><p>Common Numbers: {", ".join(map(str, result["historical_safety_check"]["recent_significant_match"]["common_numbers"]))}</p><p>Powerball Match: {"Yes" if result["historical_safety_check"]["recent_significant_match"]["powerball_match"] else "No"}</p> 
                      if result['historical_safety_check']['recent_significant_match'] else ''}
                 </div>
             </div>
