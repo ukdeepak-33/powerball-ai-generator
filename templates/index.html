@@ -65,6 +65,20 @@
             text-align: center;
             color: #7f8c8d;
         }
+        .loading-spinner {
+    border: 4px solid #f3f3f3;
+    border-top: 4px solid #e74c3c;
+    border-radius: 50%;
+    width: 40px;
+    height: 40px;
+    animation: spin 1s linear infinite;
+    margin: 0 auto;
+        }
+
+@keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+        }
     </style>
 </head>
 <body>
@@ -75,6 +89,7 @@
         <button class="btn" onclick="generateNumbers()">Generate AI-Powered Numbers</button>
         
         <div id="loading" class="loading">
+            <div class="loading-spinner"></div>
             <p>🤖 AI is analyzing historical patterns...</p>
         </div>
         
@@ -86,46 +101,65 @@
     </div>
 
     <script>
-        async function generateNumbers() {
-            const resultDiv = document.getElementById('result');
-            const loadingDiv = document.getElementById('loading');
-            const numbersDiv = document.getElementById('numbers');
-            const analysisDiv = document.getElementById('analysis');
-            
-            // Show loading, hide previous results
-            loadingDiv.style.display = 'block';
-            resultDiv.style.display = 'none';
-            
-            try {
-                const response = await fetch('/generate');
-                const data = await response.json();
-                
-                // Display numbers
-                numbersDiv.innerHTML = 
-                    data.generated_numbers.white_balls.join(' - ') + 
-                    ' <span class="powerball">⚡ ' + data.generated_numbers.powerball + '</span>';
-                
-                // Display analysis
-                analysisDiv.innerHTML = `
-                    <h3>Analysis:</h3>
-                    <p>✅ <strong>${data.analysis.group_a_count} Group A numbers</strong> (high-frequency numbers)</p>
-                    <p>🎯 <strong>${data.analysis.odd_even_ratio}</strong> odd/even ratio</p>
-                    <p>📅 <strong>2025 Frequency:</strong> ${data.generated_numbers.white_balls.map((num, index) => num + ' (' + data.analysis['2025_frequency'].white_balls[num] + ')').join(' - ')} ⚡ ${data.generated_numbers.powerball} (${data.analysis['2025_frequency'].powerball})</p>
-                    <h3>🔍 Pattern Analysis:</h3>
-                    <p style="white-space: pre-line; font-size: 14px; line-height: 1.4;">${data.analysis.pattern_analysis}</p>
-                    <p>📊 ${data.analysis.message}</p>
-                `;
-                
-                // Show results, hide loading
-                resultDiv.style.display = 'block';
-                loadingDiv.style.display = 'none';
-                
-            } catch (error) {
-                loadingDiv.style.display = 'none';
-                alert('Error generating numbers. Please try again.');
-                console.error('Error:', error);
-            }
+     async function generateNumbers() {
+    const resultDiv = document.getElementById('result');
+    const loadingDiv = document.getElementById('loading');
+    const numbersDiv = document.getElementById('numbers');
+    const analysisDiv = document.getElementById('analysis');
+    
+    // Show loading, hide previous results
+    loadingDiv.style.display = 'block';
+    resultDiv.style.display = 'none';
+    
+    try {
+        const response = await fetch('/generate');
+        
+        // Check if the response is successful
+        if (!response.ok) {
+            throw new Error(`Server returned ${response.status}: ${response.statusText}`);
         }
+        
+        const data = await response.json();
+        
+        // Check if the expected data structure exists
+        if (!data || !data.generated_numbers || !data.generated_numbers.white_balls) {
+            throw new Error('Invalid response format from server');
+        }
+        
+        // Display numbers
+        numbersDiv.innerHTML = 
+            data.generated_numbers.white_balls.join(' - ') + 
+            ' <span class="powerball">⚡ ' + data.generated_numbers.powerball + '</span>';
+        
+        // Display analysis
+        analysisDiv.innerHTML = `
+            <h3>Analysis:</h3>
+            <p>✅ <strong>${data.analysis.group_a_count} Group A numbers</strong> (high-frequency numbers)</p>
+            <p>🎯 <strong>${data.analysis.odd_even_ratio}</strong> odd/even ratio</p>
+            <p>📅 <strong>2025 Frequency:</strong> ${data.generated_numbers.white_balls.map((num, index) => num + ' (' + data.analysis['2025_frequency'].white_balls[num] + ')').join(' - ')} ⚡ ${data.generated_numbers.powerball} (${data.analysis['2025_frequency'].powerball})</p>
+            <h3>🔍 Pattern Analysis:</h3>
+            <p style="white-space: pre-line; font-size: 14px; line-height: 1.4;">${data.analysis.pattern_analysis}</p>
+            <p>📊 ${data.analysis.message}</p>
+        `;
+        
+        // Show results, hide loading
+        resultDiv.style.display = 'block';
+        loadingDiv.style.display = 'none';
+        
+    } catch (error) {
+        loadingDiv.style.display = 'none';
+        
+        // Show a user-friendly error message
+        numbersDiv.innerHTML = '❌ Error generating numbers';
+        analysisDiv.innerHTML = `
+            <p style="color: #e74c3c;">Unable to generate numbers at this time. Please try again later.</p>
+            <p><small>Technical details: ${error.message}</small></p>
+        `;
+        
+        resultDiv.style.display = 'block';
+        console.error('Error:', error);
+    }
+}
     </script>
 </body>
 </html>
