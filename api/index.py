@@ -201,7 +201,7 @@ def analyze_2025_frequency(white_balls, historical_data) -> Dict[str, Any]:
 def check_historical_matches(white_balls, powerball, historical_data) -> Dict[str, Any]:
     """Check how many numbers match historical draws"""
     analysis = {
-        'exact_matches': 0,
+        'exact_matches_found': 0,  # ← CHANGED from 'exact_matches'
         'partial_matches': [],
         'max_matches_found': 0,
         'most_recent_match': None,
@@ -238,7 +238,7 @@ def check_historical_matches(white_balls, powerball, historical_data) -> Dict[st
             analysis['partial_matches'].append(match_info)
             
             if match_info['exact_match']:
-                analysis['exact_matches'] += 1
+                analysis['exact_matches_found'] += 1  # ← CHANGED here too
             
             # Track most recent significant match
             if analysis['most_recent_match'] is None or draw['Draw Date'] > analysis['most_recent_match']['draw_date']:
@@ -580,7 +580,7 @@ async def generate_numbers_ui(request: Request):
                     📈 Historical Match Check
                 </button>
                 <div id="historical-analysis" class="analysis-content">
-                    <p><strong>Exact Matches Found:</strong> <span class="{'match-bad' if result['historical_safety_check']['exact_matches_found'] > 0 else 'match-good'} number-badge">{result['historical_safety_check']['exact_matches_found']}</span></p>
+                    <p><strong>Exact Matches Found:</strong> <span class="{'match-bad' if result['historical_safety_check']['exact_matches'] > 0 else 'match-good'} number-badge">{result['historical_safety_check']['exact_matches']}</span></p>'
                     <p><strong>Maximum Partial Matches:</strong> <span class="{'match-warning' if result['historical_safety_check']['max_partial_matches'] >= 4 else 'match-good'} number-badge">{result['historical_safety_check']['max_partial_matches']}</span></p>
                     {f'<p><strong>Most Recent Significant Match:</strong></p><p>Date: {result["historical_safety_check"]["recent_significant_match"]["draw_date"]}, Matches: {result["historical_safety_check"]["recent_significant_match"]["match_count"]}</p><p>Common Numbers: {", ".join(map(str, result["historical_safety_check"]["recent_significant_match"]["common_numbers"]))}</p><p>Powerball Match: {"Yes" if result["historical_safety_check"]["recent_significant_match"]["powerball_match"] else "No"}</p>' 
                      if result['historical_safety_check']['recent_significant_match'] else ''}
