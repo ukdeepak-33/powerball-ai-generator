@@ -449,6 +449,28 @@ async def generate_numbers_ui(request: Request):
         # Generate numbers using internal function
         result = generate_numbers_internal()
         
+        # Safely get the exact matches count (handles both key names)
+        exact_matches = result['historical_safety_check'].get('exact_matches_found', 
+                      result['historical_safety_check'].get('exact_matches', 0))
+        
+        max_matches = result['historical_safety_check']['max_matches_found']
+        
+        # Prepare 2025 frequency badges
+        freq_badges = ""
+        for num, info in result['2025_frequency']['number_frequencies_2025'].items():
+            freq_badges += f'<span class="number-badge {info["status"].lower()}">{num}: {info["count"]} ({info["percentage"]})</span>'
+        
+        # Prepare historical match info
+        historical_info = ""
+        if result['historical_safety_check']['recent_significant_match']:
+            match = result['historical_safety_check']['recent_significant_match']
+            historical_info = f'''
+                <p><strong>Most Recent Significant Match:</strong></p>
+                <p>Date: {match['draw_date']}, Matches: {match['match_count']}</p>
+                <p>Common Numbers: {", ".join(map(str, match['common_numbers']))}</p>
+                <p>Powerball Match: {"Yes" if match['powerball_match'] else "No"}</p>
+            '''
+        
         # Render the HTML with the results
         html_content = f"""
         <!DOCTYPE html>
@@ -575,18 +597,16 @@ async def generate_numbers_ui(request: Request):
                 </button>
                 <div id="2025-analysis" class="analysis-content">
                     <p><strong>2025 Draws Analyzed:</strong> {result['2025_frequency']['2025_draws_count']}</p>
-                    {"".join([f'<span class="number-badge {info["status"].lower()}">{num}: {info["count"]} ({info["percentage"]})</span>
-                             for num, info in result['2025_frequency']['number_frequencies_2025'].items()])}
+                    {freq_badges}
                 </div>
                 
                 <button class="analysis-toggle" onclick="toggleAnalysis('historical-analysis')">
                     📈 Historical Match Check
                 </button>
                 <div id="historical-analysis" class="analysis-content">
-                    <p><strong>Exact Matches Found:</strong> <span class="{'match-bad' if result['historical_safety_check'].get('exact_matches_found', result['historical_safety_check'].get('exact_matches', 0)) > 0 else 'match-good'} number-badge">{result['historical_safety_check'].get('exact_matches_found', result['historical_safety_check'].get('exact_matches', 0))}</span></p>
-                    <p><strong>Maximum Partial Matches:</strong> <span class="{'match-warning' if result['historical_safety_check']['max_partial_matches'] >= 4 else 'match-good'} number-badge">{result['historical_safety_check']['max_partial_matches']}</span></p>
-                    {f'<p><strong>Most Recent Significant Match:</strong></p><p>Date: {result["historical_safety_check"]["recent_significant_match"]["draw_date"]}, Matches: {result["historical_safety_check"]["recent_significant_match"]["match_count"]}</p><p>Common Numbers: {", ".join(map(str, result["historical_safety_check"]["recent_significant_match"]["common_numbers"]))}</p><p>Powerball Match: {"Yes" if result["historical_safety_check"]["recent_significant_match"]["powerball_match"] else "No"}</p> 
-                     if result['historical_safety_check']['recent_significant_match'] else ''}
+                    <p><strong>Exact Matches Found:</strong> <span class="{'match-bad' if exact_matches > 0 else 'match-good'} number-badge">{exact_matches}</span></p>
+                    <p><strong>Maximum Partial Matches:</strong> <span class="{'match-warning' if max_matches >= 4 else 'match-good'} number-badge">{max_matches}</span></p>
+                    {historical_info}
                 </div>
             </div>
 
@@ -601,6 +621,21 @@ async def generate_numbers_ui(request: Request):
         """
         
         return HTMLResponse(content=html_content)
+        
+    except Exception as e:
+        error_html = f"""
+        <div class="container">
+            <h1>🎰 Powerball AI Generator</h1>
+            <div class="error">
+                <h3>Error Generating Numbers</h3>
+                <p>{str(e)}</p>
+            </div>
+            <form action="/generate-ui" method="POST">
+                <button type="submit" class="btn">Try Again</button>
+            </form>
+        </div>
+        """
+        return HTMLResponse(content=error_html)
         
     except Exception as e:
         error_html = f"""
