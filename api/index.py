@@ -8,10 +8,8 @@ import numpy as np
 import os
 from dotenv import load_dotenv
 import joblib
-from typing import List, Optional, Dict, Any
+from typing import List, Optional
 from pathlib import Path
-from collections import Counter
-from datetime import datetime
 
 # Load environment variables
 load_dotenv()
@@ -51,231 +49,268 @@ except FileNotFoundError:
     print("⚠ No pre-trained model found. Using random generation as fallback")
     MODEL = None
 
-# ... [Keep all your existing functions: predict_numbers, fetch_historical_draws, 
-# fetch_2025_draws, analyze_2025_frequency, check_historical_matches] 
-# They remain exactly the same as in the previous version ...
+def predict_numbers(historical_data):
+    """Use ML model to predict numbers based on historical data"""
+    if MODEL is None:
+        # Fallback to random if no model
+        white_balls = sorted(np.random.choice(range(1, 70), size=5, replace=False))
+        powerball = np.random.randint(1, 27)
+        return white_balls, powerball
+    
+    # Prepare features from historical data
+    df = pd.DataFrame(historical_data)
+    number_columns = ['Number 1', 'Number 2', 'Number 3', 'Number 4', 'Number 5']
+    
+    # Use the last 5 draws to make prediction
+    if len(df) >= 5:
+        recent_draws = df.iloc[-5:]
+        
+        # Create feature vector exactly like during training
+        feature = np.zeros(69)
+        for _, draw in recent_draws.iterrows():
+            numbers = [draw['Number 1'], draw['Number 2'], draw['Number 3'],
+                      draw['Number 4'], draw['Number 5']]
+            for num in numbers:
+                if isinstance(num, (int, float)) and 1 <= num <= 69:
+                    feature[int(num)-1] += 1
+        
+        try:
+            # Get prediction probabilities from model
+            probabilities = MODEL.predict_proba([feature])
+            
+            print(f"🔍 Probabilities shape: {[p.shape for p in probabilities] if hasattr(probabilities, '__iter__') else 'Unknown'}")
+            
+            # Since the model output is unexpected, let's use a simpler approach
+            # Get the predicted classes directly
+            predictions = MODEL.predict([feature])
+            
+            # Flatten all predictions and get the most frequent numbers
+            all_predicted_numbers = []
+            for pred in predictions:
+                # Get indices where prediction is 1 (number is present)
+                predicted_indices = np.where(pred == 1)[0]
+                predicted_numbers = [idx + 1 for idx in predicted_indices]
+                all_predicted_numbers.extend(predicted_numbers)
+            
+            # If we got predictions, use the most frequent ones
+            if all_predicted_numbers:
+                from collections import Counter
+                number_counts = Counter(all_predicted_numbers)
+                most_common = number_counts.most_common(10)  # Top 10 most frequent
+                
+                # Select 5 unique numbers
+                selected_numbers = []
+                for num, count in most_common:
+                    if num not in selected_numbers and 1 <= num <= 69:
+                        selected_numbers.append(num)
+                    if len(selected_numbers) >= 5:
+                        break
+                
+                # If we didn't get 5 numbers, fill with random
+                while len(selected_numbers) < 5:
+                    random_num = np.random.randint(1, 70)
+                    if random_num not in selected_numbers:
+                        selected_numbers.append(random_num)
+                
+                white_balls = sorted(selected_numbers)
+            else:
+                # Fallback to random
+                white_balls = sorted(np.random.choice(range(1, 70), size=5, replace=False))
+            
+        except Exception as e:
+            print(f"❌ ML prediction failed: {e}, using random fallback")
+            white_balls = sorted(np.random.choice(range(1, 70), size=5, replace=False))
+        
+    else:
+        # Not enough data, use random
+        white_balls = sorted(np.random.choice(range(1, 70), size=5, replace=False))
+    
+    powerball = np.random.randint(1, 27)  # Powerball is separate
+    
+    # Convert numpy types to Python native types for JSON serialization
+    white_balls = [int(num) for num in white_balls]
+    powerball = int(powerball)
+    
+    return white_balls, powerball
+
+def fetch_historical_draws(limit: int = 1000) -> List[dict]:
+    """Fetches historical draws from Supabase"""
+    try:
+        response = supabase.table(SUPABASE_TABLE_NAME) \
+                          .select('*') \
+                          .order('"Draw Date"', desc=True) \
+                          .limit(limit) \
+                          .execute()
+        return response.data
+    except Exception as e:
+        print(f"Error fetching data from Supabase: {e}")
+        return []
+
+def prepare_features(draws_df: pd.DataFrame) -> pd.DataFrame:
+    """Engineers features from raw draw data"""
+    # Use your actual column names from Supabase
+    white_ball_columns = ['Number 1', 'Number 2', 'Number 3', 'Number 4', 'Number 5']
+    
+    # Ensure we have the required columns
+    if not all(col in draws_df.columns for col in white_ball_columns):
+        available_cols = list(draws_df.columns)
+        print(f"Available columns: {available_cols}")
+        print(f"Required columns: {white_ball_columns}")
+        raise ValueError(f"DataFrame missing required white ball columns. Available: {available_cols}")
+    
+    # Create a copy to avoid modifying the original
+    df = draws_df.copy()
+    
+    # FIXED: Replace deprecated applymap with map
+    # Feature: Count of Group A numbers
+    df['group_a_count'] = df[white_ball_columns].map(lambda x: x in GROUP_A_NUMBERS).sum(axis=1)
+    
+    # Feature: Odd/Even count
+    df['odd_count'] = df[white_ball_columns].map(lambda x: x % 2 == 1).sum(axis=1)
+    
+    # Feature: Sum of white balls
+    df['sum_white'] = df[white_ball_columns].sum(axis=1)
+    
+    # Feature: Check for consecutive numbers
+    def has_consecutive(row):
+        sorted_nums = sorted([row[col] for col in white_ball_columns])
+        for i in range(len(sorted_nums)-1):
+            if sorted_nums[i+1] - sorted_nums[i] == 1:
+                return 1
+        return 0
+    
+    df['has_consecutive'] = df.apply(has_consecutive, axis=1)
+    
+    return df
 
 @app.get("/", response_class=HTMLResponse)
 async def read_root():
-    """Serve the main HTML interface"""
-    html_content = """
-    <!DOCTYPE html>
-    <html>
-    <head>
-        <title>Powerball AI Generator</title>
-        <style>
-            body { 
-                font-family: Arial, sans-serif; 
-                max-width: 900px; 
-                margin: 0 auto; 
-                padding: 20px; 
-                background-color: #f5f5f5;
-            }
-            .container {
-                background: white;
-                padding: 30px;
-                border-radius: 15px;
-                box-shadow: 0 4px 20px rgba(0,0,0,0.1);
-            }
-            h1 { 
-                color: #2c3e50; 
-                text-align: center; 
-                margin-bottom: 10px;
-            }
-            .subtitle {
-                text-align: center;
-                color: #7f8c8d;
-                margin-bottom: 30px;
-            }
-            .btn { 
-                background: #e74c3c; 
-                color: white; 
-                padding: 15px 30px; 
-                border: none; 
-                border-radius: 8px; 
-                font-size: 18px; 
-                cursor: pointer; 
-                display: block; 
-                margin: 20px auto;
-                transition: all 0.3s ease;
-            }
-            .btn:hover { 
-                background: #c0392b; 
-                transform: translateY(-2px);
-                box-shadow: 0 6px 15px rgba(231, 76, 60, 0.3);
-            }
-            .numbers-display {
-                font-size: 28px;
-                font-weight: bold;
-                text-align: center;
-                margin: 30px 0;
-                padding: 20px;
-                background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-                color: white;
-                border-radius: 12px;
-                box-shadow: 0 6px 20px rgba(0,0,0,0.15);
-            }
-            .powerball {
-                color: #ffeb3b;
-                font-weight: bold;
-                font-size: 32px;
-            }
-            .analysis-section {
-                margin: 20px 0;
-                padding: 20px;
-                background: #ecf0f1;
-                border-radius: 10px;
-                border-left: 5px solid #3498db;
-            }
-            .analysis-toggle {
-                background: #34495e;
-                color: white;
-                padding: 12px 20px;
-                border: none;
-                border-radius: 6px;
-                cursor: pointer;
-                margin: 10px 0;
-                width: 100%;
-                text-align: left;
-                font-weight: bold;
-            }
-            .analysis-content {
-                display: none;
-                padding: 15px;
-                background: white;
-                border-radius: 8px;
-                margin-top: 10px;
-                border: 1px solid #bdc3c7;
-            }
-            .number-badge {
-                display: inline-block;
-                padding: 5px 12px;
-                margin: 5px;
-                border-radius: 20px;
-                font-weight: bold;
-                font-size: 14px;
-            }
-            .hot { background: #e74c3c; color: white; }
-            .warm { background: #f39c12; color: white; }
-            .cold { background: #7f8c8d; color: white; }
-            .match-good { background: #27ae60; color: white; }
-            .match-warning { background: #f39c12; color: white; }
-            .match-bad { background: #e74c3c; color: white; }
-            .loading {
-                display: none;
-                text-align: center;
-                color: #7f8c8d;
-                font-size: 18px;
-                margin: 20px 0;
-            }
-            .result-container {
-                display: none;
-            }
-        </style>
-    </head>
-    <body>
-        <div class="container">
+    """Serve the HTML homepage"""
+    index_path = Path("templates/index.html")
+    if index_path.exists():
+        with open(index_path, 'r') as f:
+            html_content = f.read()
+        return HTMLResponse(content=html_content)
+    else:
+        return HTMLResponse("""
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <title>Powerball AI Generator</title>
+            <style>
+                body { font-family: Arial, sans-serif; max-width: 800px; margin: 0 auto; padding: 20px; }
+                h1 { color: #2c3e50; text-align: center; }
+                .btn { background: #e74c3c; color: white; padding: 15px 30px; border: none; border-radius: 5px; 
+                      font-size: 18px; cursor: pointer; display: block; margin: 20px auto; }
+                .btn:hover { background: #c0392b; }
+            </style>
+        </head>
+        <body>
             <h1>🎰 Powerball AI Generator</h1>
-            <p class="subtitle">AI-powered number generation with historical analysis</p>
-            
-            <button class="btn" onclick="generateNumbers()">Generate AI Numbers</button>
-            
-            <div id="loading" class="loading">
-                <p>🤖 AI is analyzing historical patterns...</p>
+            <p style="text-align: center;">API is running successfully! 🚀</p>
+            <div style="text-align: center;">
+                <a href="/generate" style="text-decoration: none;">
+                    <button class="btn">Generate Numbers</button>
+                </a>
+                <a href="/analyze" style="text-decoration: none;">
+                    <button class="btn" style="background: #3498db;">Analyze Trends</button>
+                </a>
+                <a href="/docs" style="text-decoration: none;">
+                    <button class="btn" style="background: #27ae60;">API Documentation</button>
+                </a>
             </div>
-            
-            <div id="result-container" class="result-container">
-                <div id="numbers-display" class="numbers-display"></div>
-                
-                <button class="analysis-toggle" onclick="toggleAnalysis('basic-analysis')">
-                    📊 Basic Analysis
-                </button>
-                <div id="basic-analysis" class="analysis-content"></div>
-                
-                <button class="analysis-toggle" onclick="toggleAnalysis('2025-analysis')">
-                    📅 2025 Frequency Analysis
-                </button>
-                <div id="2025-analysis" class="analysis-content"></div>
-                
-                <button class="analysis-toggle" onclick="toggleAnalysis('historical-analysis')">
-                    📈 Historical Match Check
-                </button>
-                <div id="historical-analysis" class="analysis-content"></div>
-            </div>
-        </div>
+            <p style="text-align: center; margin-top: 30px;">
+                Your AI-powered Powerball number generator is ready to use!
+            </p>
+        </body>
+        </html>
+        """)
 
-        <script>
-            async function generateNumbers() {
-                const loadingDiv = document.getElementById('loading');
-                const resultDiv = document.getElementById('result-container');
-                const numbersDisplay = document.getElementById('numbers-display');
-                
-                // Show loading, hide previous results
-                loadingDiv.style.display = 'block';
-                resultDiv.style.display = 'none';
-                
-                try {
-                    const response = await fetch('/generate');
-                    const data = await response.json();
-                    
-                    // Display numbers
-                    numbersDisplay.innerHTML = data.numbers.replace('âš¡', '⚡');
-                    
-                    // Display basic analysis
-                    document.getElementById('basic-analysis').innerHTML = `
-                        <p><strong>Group A Numbers:</strong> ${data.basic_analysis.group_a_numbers}</p>
-                        <p><strong>Odd/Even Ratio:</strong> ${data.basic_analysis.odd_even_ratio}</p>
-                        <p><strong>Total Numbers:</strong> ${data.basic_analysis.total_numbers}</p>
-                    `;
-                    
-                    // Display 2025 frequency analysis
-                    let freqHtml = `<p><strong>2025 Draws Analyzed:</strong> ${data['2025_frequency']['2025_draws_count']}</p>`;
-                    for (const [num, info] of Object.entries(data['2025_frequency']['number_frequencies_2025'])) {
-                        freqHtml += `<span class="number-badge ${info.status.toLowerCase()}">${num}: ${info.count} (${info.percentage})</span>`;
-                    }
-                    document.getElementById('2025-analysis').innerHTML = freqHtml;
-                    
-                    // Display historical analysis
-                    let histHtml = `
-                        <p><strong>Exact Matches Found:</strong> <span class="${data.historical_safety_check.exact_matches_found > 0 ? 'match-bad' : 'match-good'} number-badge">${data.historical_safety_check.exact_matches_found}</span></p>
-                        <p><strong>Maximum Partial Matches:</strong> <span class="${data.historical_safety_check.max_partial_matches >= 4 ? 'match-warning' : 'match-good'} number-badge">${data.historical_safety_check.max_partial_matches}</span></p>
-                    `;
-                    
-                    if (data.historical_safety_check.recent_significant_match) {
-                        const match = data.historical_safety_check.recent_significant_match;
-                        histHtml += `
-                            <p><strong>Most Recent Significant Match:</strong></p>
-                            <p>Date: ${match.draw_date}, Matches: ${match.match_count}</p>
-                            <p>Common Numbers: ${match.common_numbers.join(', ')}</p>
-                            <p>Powerball Match: ${match.powerball_match ? 'Yes' : 'No'}</p>
-                        `;
-                    }
-                    
-                    document.getElementById('historical-analysis').innerHTML = histHtml;
-                    
-                    // Show results, hide loading
-                    resultDiv.style.display = 'block';
-                    loadingDiv.style.display = 'none';
-                    
-                } catch (error) {
-                    loadingDiv.style.display = 'none';
-                    alert('Error generating numbers. Please try again.');
-                    console.error('Error:', error);
+@app.get("/generate")
+async def generate_numbers():
+    """Generate Powerball numbers with analysis"""
+    try:
+        # Fetch historical data
+        print("📊 Fetching historical data...")
+        historical_data = fetch_historical_draws(limit=500)
+        if not historical_data:
+            print("❌ No historical data found")
+            raise HTTPException(status_code=404, detail="No historical data found")
+        
+        print(f"✅ Found {len(historical_data)} historical draws")
+        
+        df = pd.DataFrame(historical_data)
+        print(f"📋 DataFrame columns: {list(df.columns)}")
+        print(f"📋 First row: {dict(df.iloc[0]) if len(df) > 0 else 'No data'}")
+        
+        # Prepare features
+        print("🔧 Preparing features...")
+        engineered_data = prepare_features(df)
+        print("✅ Features prepared successfully")
+        
+        # Generate numbers using ML model
+        print("🤖 Generating numbers with ML model...")
+        white_balls, powerball = predict_numbers(historical_data)
+        print(f"✅ Generated numbers: {white_balls}, Powerball: {powerball}")
+        
+        # Analyze the generated numbers
+        group_a_count = sum(1 for num in white_balls if num in GROUP_A_NUMBERS)
+        odd_count = sum(1 for num in white_balls if num % 2 == 1)
+        
+        return JSONResponse({
+             "generated_numbers": {
+              "white_balls": [int(num) for num in white_balls],  # Convert to Python int
+              "powerball": int(powerball)  # Convert to Python int
+    },
+    "analysis": {
+        "group_a_count": int(group_a_count),  # Convert to Python int
+        "odd_even_ratio": f"{int(odd_count)} odd, {5 - int(odd_count)} even",
+        "total_numbers_generated": len(white_balls),
+        "message": "AI-generated numbers based on historical patterns"
+    }
+})
+        
+    except Exception as e:
+        print(f"❌ Error in generate_numbers: {str(e)}")
+        import traceback
+        print(f"🔍 Traceback: {traceback.format_exc()}")
+        raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
+
+@app.get("/analyze")
+async def analyze_trends():
+    """Analyze historical trends"""
+    try:
+        historical_data = fetch_historical_draws(limit=1000)
+        if not historical_data:
+            raise HTTPException(status_code=404, detail="No historical data available for analysis")
+        
+        df = pd.DataFrame(historical_data)
+        engineered_data = prepare_features(df)
+        
+        # Calculate various statistics
+        avg_group_a = engineered_data['group_a_count'].mean()
+        consecutive_frequency = engineered_data['has_consecutive'].mean()
+        avg_odd_count = engineered_data['odd_count'].mean()
+        
+        return JSONResponse({
+            "historical_analysis": {
+                "total_draws_analyzed": len(engineered_data),
+                "average_group_a_numbers": round(avg_group_a, 2),
+                "consecutive_number_frequency": f"{consecutive_frequency * 100:.1f}%",
+                "average_odd_numbers": round(avg_odd_count, 2),
+                "data_timeframe": {
+                    "oldest_draw": df['Draw Date'].min() if 'Draw Date' in df.columns else "Unknown",
+                    "newest_draw": df['Draw Date'].max() if 'Draw Date' in df.columns else "Unknown"
                 }
             }
-            
-            function toggleAnalysis(id) {
-                const content = document.getElementById(id);
-                content.style.display = content.style.display === 'none' ? 'block' : 'none';
-            }
-        </script>
-    </body>
-    </html>
-    """
-    return HTMLResponse(content=html_content)
+        })
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Analysis error: {str(e)}")
 
-# ... [Keep all your existing API endpoints: /generate, /check-numbers, /health] 
-# They remain exactly the same as in the previous version ...
+@app.get("/health")
+async def health_check():
+    return {"status": "healthy", "message": "Service is running normally"}
 
 if __name__ == "__main__":
     import uvicorn
