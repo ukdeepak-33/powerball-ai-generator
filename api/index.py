@@ -6,6 +6,8 @@ from sklearn.ensemble import GradientBoostingClassifier
 from sklearn.model_selection import train_test_split
 from sklearn.multioutput import MultiOutputClassifier
 from sklearn.preprocessing import MultiLabelBinarizer
+from sklearn.linear_model import LogisticRegression
+from sklearn.metrics import jaccard_score
 from collections import defaultdict, Counter
 from typing import Dict, List, Any, Set, Tuple, Optional
 from supabase import create_client, Client
@@ -385,73 +387,110 @@ def format_pattern_analysis(pattern_history: Dict[str, Any]) -> str:
     
     return "\n".join(analysis_lines)
 
-def load_or_train_model(historical_data):
-    """Load existing model or train a new one with version compatibility"""
-    model_path = 'enhanced_model.joblib'
-    
+def load_or_train_model(historical_data: List[Dict[str, Any]]):
+    """
+    Loads an existing model or trains a new one, then performs a comparison.
+    """
+    # This function is now a launcher for the comparison process
+    compare_models(historical_data)
+
+    # You can choose which model to load for the main application
+    # For now, let's load the Gradient Boosting model as a default.
+    model_path = "enhanced_model_gradient_boosting.joblib"
     try:
-        # Try to load existing model
         model = joblib.load(model_path)
-        print("✅ Enhanced ML model loaded successfully!")
+        print("✅ Trained ML model loaded successfully!")
         return model
-    except (FileNotFoundError, Exception) as e:
-        print(f"⚠ No enhanced model found or version issue: {e}. Training new model...")
-        return train_enhanced_model(historical_data)
+    except FileNotFoundError:
+        print(f"⚠ No enhanced model found at {model_path}. Please check file path.")
+        return None
 
-def train_enhanced_model(historical_data: list):
+def create_features(df):
     """
-    Trains a multi-label classification model on historical data.
+    Creates a feature matrix (X) for model training.
     """
-    print("🤖 Training enhanced model...")
+    white_balls_df = df[['Number 1', 'Number 2', 'Number 3', 'Number 4', 'Number 5']]
+    melted_df = white_balls_df.melt(value_name='Number').drop(columns='variable')
+    X = pd.get_dummies(melted_df, columns=['Number'], prefix='', prefix_sep='').groupby(melted_df.index).sum()
+    X.columns = [f'num_present_{col}' for col in X.columns]
+    return X
 
+def train_and_evaluate_model(model_instance, historical_data, model_name):
+    """
+    Trains a multi-output classifier, evaluates its performance, and saves it.
+    
+    Args:
+        model_instance: The base scikit-learn model to use (e.g., GradientBoostingClassifier).
+        historical_data (list): The list of historical draw data.
+        model_name (str): The name of the model for logging and file naming.
+    
+    Returns:
+        dict: A dictionary containing the model and its evaluation score.
+    """
+    print(f"\n🤖 Training and evaluating {model_name}...")
+    
     # Convert the list of dictionaries to a pandas DataFrame
     if isinstance(historical_data, list):
-        historical_data = pd.DataFrame(historical_data)
+        df = pd.DataFrame(historical_data)
+    else:
+        df = historical_data
 
-    # Drop rows with NaN values to ensure consistent sample count
-    historical_data = historical_data.dropna()
-
-    def create_features(df):
-        """
-        Creates a feature matrix (X) for model training.
-        This function has been corrected to avoid the 'level' keyword.
-        """
-        white_balls_df = df[['Number 1', 'Number 2', 'Number 3', 'Number 4', 'Number 5']]
-        melted_df = white_balls_df.melt(value_name='Number').drop(columns='variable')
-        X = pd.get_dummies(melted_df, columns=['Number'], prefix='', prefix_sep='').groupby(melted_df.index).sum()
-        X.columns = [f'num_present_{col}' for col in X.columns]
-        return X
-
-    X = create_features(historical_data)
-
-    # Prepare target variable (y) for multi-label classification
-    white_balls_list = historical_data[['Number 1', 'Number 2', 'Number 3', 'Number 4', 'Number 5']].values.tolist()
+    # Drop rows with NaN values
+    df = df.dropna()
+    
+    # Create features (X) and target (y)
+    X = create_features(df)
+    white_balls_list = df[['Number 1', 'Number 2', 'Number 3', 'Number 4', 'Number 5']].values.tolist()
     
     mlb = MultiLabelBinarizer(classes=range(1, 70))
     y_white_balls = mlb.fit_transform(white_balls_list)
     
-    if X.shape[0] != y_white_balls.shape[0]:
-        min_samples = min(X.shape[0], y_white_balls.shape[0])
-        X = X[:min_samples]
-        y_white_balls = y_white_balls[:min_samples]
+    # Align the number of samples
+    min_samples = min(X.shape[0], y_white_balls.shape[0])
+    X = X[:min_samples]
+    y_white_balls = y_white_balls[:min_samples]
 
-    print(f"✅ Data prepared: X shape {X.shape}, y shape {y_white_balls.shape}")
+    print(f"✅ Data prepared for {model_name}: X shape {X.shape}, y shape {y_white_balls.shape}")
+    
+    # Initialize and fit the multi-output classifier
+    model = MultiOutputClassifier(model_instance, n_jobs=-1)
+    model.fit(X, y_white_balls)
+    
+    # Make predictions and evaluate
+    y_pred = model.predict(X)
+    score = jaccard_score(y_white_balls, y_pred, average='samples')
+    
+    # Save the trained model
+    model_path = f"enhanced_model_{model_name.lower().replace(' ', '_')}.joblib"
+    joblib.dump(model, model_path)
+    
+    print(f"✅ {model_name} trained and saved with Jaccard Score: {score:.4f}")
+    
+    return {"model": model, "score": score}
 
-    base_classifier = GradientBoostingClassifier(n_estimators=100, learning_rate=0.1, max_depth=3, random_state=42)
-    model = MultiOutputClassifier(base_classifier, n_jobs=-1)
-
-    try:
-        model.fit(X, y_white_balls)
-        model_path = "enhanced_model.joblib"
-        joblib.dump(model, model_path)
-        print("✅ Enhanced model trained and saved successfully.")
-        return model
-
-    except Exception as e:
-        print(f"❌ Error training enhanced model: {e}")
-        import traceback
-        print("🔍 Traceback:", traceback.format_exc())
-        return None
+def compare_models(historical_data):
+    """
+    Orchestrates the training and comparison of multiple models.
+    """
+    models_to_test = {
+        "Gradient Boosting": GradientBoostingClassifier(n_estimators=100, learning_rate=0.1, max_depth=3, random_state=42),
+        "Random Forest": RandomForestClassifier(n_estimators=100, random_state=42),
+        "Logistic Regression": LogisticRegression(solver='liblinear', random_state=42)
+    }
+    
+    results = {}
+    
+    for name, model_instance in models_to_test.items():
+        try:
+            result = train_and_evaluate_model(model_instance, historical_data, name)
+            results[name] = result["score"]
+        except Exception as e:
+            print(f"❌ Error training {name}: {e}")
+    
+    print("\n📊 --- Final Model Comparison ---")
+    for name, score in results.items():
+        print(f"  {name}: Jaccard Score = {score:.4f}")
+    print("-----------------------------------")
 
 def prepare_enhanced_features(draws_df: pd.DataFrame) -> pd.DataFrame:
     """Enhanced feature engineering"""
