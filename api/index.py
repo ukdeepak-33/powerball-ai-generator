@@ -603,13 +603,11 @@ except Exception as e:
     print(f"❌ Model loading failed: {e}")
     MODEL = None
 
-
-
 def get_2025_frequencies(white_balls, powerball, historical_data):
     """Get frequency counts for numbers in 2025 only"""
     if not historical_data:
         return {
-            'white_ball_counts': {num: 0 for num in white_balls},
+            'white_ball_counts': {int(num): 0 for num in white_balls},  # Convert to int
             'powerball_count': 0,
             'total_2025_draws': 0
         }
@@ -625,17 +623,21 @@ def get_2025_frequencies(white_balls, powerball, historical_data):
     
     white_ball_counter = Counter(all_white_balls)
     for num in white_balls:
-        white_ball_counts[num] = white_ball_counter.get(num, 0)
+        # Convert numpy numbers to Python integers
+        python_num = int(num)
+        white_ball_counts[python_num] = white_ball_counter.get(python_num, 0)
     
     # Count powerball frequency in 2025
     powerball_counts = Counter(df['Powerball'])
-    powerball_count = powerball_counts.get(powerball, 0)
+    python_powerball = int(powerball)
+    powerball_count = powerball_counts.get(python_powerball, 0)
     
     return {
         'white_ball_counts': white_ball_counts,
         'powerball_count': powerball_count,
         'total_2025_draws': len(df)
     }
+
 
 @app.get("/", response_class=HTMLResponse)
 async def read_root():
@@ -819,6 +821,19 @@ def predict_numbers(historical_data):
         return generate_smart_numbers(historical_data)
     
     return predict_enhanced_numbers(historical_data, MODEL)
+
+@app.get("/test-json")
+async def test_json_serialization():
+    """Test endpoint to check JSON serialization works"""
+    test_data = {
+        "numbers": [1, 4, 26, 56, 59],
+        "powerball": 18,
+        "frequencies": {
+            "white_balls": {1: 5, 4: 3, 26: 7, 56: 2, 59: 4},  # Python int keys
+            "powerball": 2
+        }
+    }
+    return JSONResponse(test_data)
 
 @app.get("/test-patterns")
 async def test_patterns():
