@@ -153,7 +153,7 @@ def fetch_2025_draws() -> List[dict]:
         print(f"Error fetching 2025 data: {e}")
         return []
 
-def fetch_historical_draws(limit: int = 1000) -> List[dict]:
+def fetch_historical_draws() -> List[dict]:
     """Fetches historical draws from Supabase"""
     try:
         response = supabase.table(SUPABASE_TABLE_NAME) \
@@ -601,7 +601,7 @@ def generate_smart_numbers(historical_data):
 # Update the global model loading
 try:
     # Try to load enhanced model first
-    historical_data = fetch_historical_draws(limit=100)
+    historical_data = fetch_historical_draws()
     MODEL = load_or_train_model(historical_data)
     if MODEL is None:
         print("⚠ Using smart number generation instead of ML model")
@@ -694,7 +694,7 @@ async def generate_numbers():
     try:
         # Fetch historical data
         print("📊 Fetching historical data...")
-        historical_data = fetch_historical_draws(limit=500)
+        historical_data = fetch_historical_draws()
         if not historical_data:
             print("❌ No historical data found")
             raise HTTPException(status_code=404, detail="No historical data found")
@@ -769,7 +769,7 @@ async def generate_numbers():
 async def analyze_trends():
     """Analyze historical trends"""
     try:
-        historical_data = fetch_historical_draws(limit=1000)
+        historical_data = fetch_historical_draws()
         if not historical_data:
             raise HTTPException(status_code=404, detail="No historical data available for analysis")
         
@@ -855,7 +855,7 @@ async def test_patterns():
         print(f"✅ Patterns detected: {patterns}")
         
         # Get historical data for analysis
-        historical_data = fetch_historical_draws(limit=100)
+        historical_data = fetch_historical_draws()
         print(f"📊 Historical data: {len(historical_data)} records")
         
         # Analyze pattern history
