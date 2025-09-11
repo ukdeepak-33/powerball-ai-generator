@@ -1,23 +1,25 @@
 # api/index.py
+# api/index.py
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, HTMLResponse
-from sklearn.ensemble import GradientBoostingClassifier
 from sklearn.model_selection import train_test_split
 from sklearn.multioutput import MultiOutputClassifier
-from sklearn.preprocessing import MultiLabelBinarizer
-from sklearn.linear_model import LogisticRegression
-from sklearn.metrics import jaccard_score
 from collections import defaultdict, Counter
-from typing import Dict, List, Any, Set, Tuple, Optional
+from typing import Dict, List, Any, Set, Tuple
 from supabase import create_client, Client
-import json
 import pandas as pd
 import numpy as np
 import os
 from dotenv import load_dotenv
 import joblib
+from typing import List, Optional
 from pathlib import Path
+from collections import Counter
+from sklearn.ensemble import GradientBoostingClassifier, RandomForestClassifier
+from sklearn.linear_model import LogisticRegression
+from sklearn.preprocessing import MultiLabelBinarizer
+from sklearn.metrics import jaccard_score
 
 # Load environment variables
 load_dotenv()
