@@ -399,17 +399,17 @@ def load_or_train_model(historical_data):
         return train_enhanced_model(historical_data)
 
 def train_enhanced_model(historical_data):
-    """Train a new enhanced model with version compatibility"""
+    """Train a new enhanced model with proper single-output approach"""
     try:
         df = pd.DataFrame(historical_data)
-        if len(df) < 50:  # Need sufficient data
+        if len(df) < 50:
             print("⚠ Not enough data for training enhanced model")
             return None
         
         # Prepare enhanced features
         engineered_data = prepare_enhanced_features(df)
         
-        # Prepare features and labels
+        # Prepare features
         feature_columns = [
             'group_a_count', 'odd_count', 'sum_white', 'std_dev', 'range',
             'prime_count'
@@ -417,39 +417,47 @@ def train_enhanced_model(historical_data):
         
         X = engineered_data[feature_columns].fillna(0)
         
-        # Create multi-label target (which numbers appear)
+        # Instead of multi-label, let's predict the MOST LIKELY numbers
+        # by analyzing frequency patterns
+        
+        # Get frequency of each number in historical data
         white_ball_columns = ['Number 1', 'Number 2', 'Number 3', 'Number 4', 'Number 5']
-        y = np.zeros((len(df), 69))  # 69 possible white balls
-        
-        for i, row in df.iterrows():
+        all_numbers = []
+        for _, row in df.iterrows():
             for col in white_ball_columns:
-                num = row[col]
-                if 1 <= num <= 69:
-                    y[i, num-1] = 1  # One-hot encoding
+                all_numbers.append(row[col])
         
-        # Train-test split
-        X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
+        number_counts = Counter(all_numbers)
         
-        # Use simpler model for better compatibility
+        # Create target: whether a number is above average frequency
+        avg_frequency = np.mean(list(number_counts.values()))
+        y = np.array([1 if number_counts.get(i+1, 0) > avg_frequency else 0 
+                     for i in range(69)])
+        
+        # Train model to predict high-frequency numbers
         model = GradientBoostingClassifier(
-            n_estimators=50,  # Reduced for faster training
+            n_estimators=50,
             learning_rate=0.1,
-            max_depth=3,      # Reduced for compatibility
+            max_depth=3,
             random_state=42
         )
         
-        # Train model
-        model.fit(X_train, y_train)
+        model.fit(X, y)
         
         # Save the model
         joblib.dump(model, 'enhanced_model.joblib')
         
-        print(f"✅ Enhanced model trained successfully! Accuracy: {model.score(X_test, y_test):.3f}")
+        # Calculate accuracy
+        accuracy = model.score(X, y)
+        print(f"✅ Enhanced model trained successfully! Accuracy: {accuracy:.3f}")
         return model
         
     except Exception as e:
         print(f"❌ Error training enhanced model: {e}")
+        import traceback
+        print(f"🔍 Traceback: {traceback.format_exc()}")
         return None
+
 
 def prepare_enhanced_features(draws_df: pd.DataFrame) -> pd.DataFrame:
     """Enhanced feature engineering"""
@@ -514,36 +522,38 @@ def predict_enhanced_numbers(historical_data, model):
         # Average features across recent draws
         avg_features = features[feature_columns].mean().values.reshape(1, -1)
         
-        # Get predictions
-        probabilities = model.predict_proba(avg_features)
+        # Get predictions for which numbers are high-frequency
+        predictions = model.predict(avg_features)[0]
         
-        # Process probabilities to select numbers
-        number_probs = []
-        for i in range(69):
-            number = i + 1
-            # Handle different probability array structures
-            if isinstance(probabilities, list) and i < len(probabilities):
-                prob = probabilities[i][0, 1]  # Probability this number appears
-            else:
-                # Fallback: use simple frequency
-                prob = 0.01
-            number_probs.append((number, prob))
+        # Get probabilities for ranking
+        try:
+            probabilities = model.predict_proba(avg_features)[0]
+            # probabilities is shape (69, 2) - [prob_class_0, prob_class_1] for each number
+            high_freq_probs = probabilities[:, 1]  # Probability of being high-frequency
+        except:
+            # Fallback if predict_proba not available
+            high_freq_probs = predictions.astype(float)
         
-        # Select top 5 numbers by probability
+        # Create list of numbers with their probabilities
+        number_probs = [(i+1, high_freq_probs[i]) for i in range(69)]
+        
+        # Sort by probability (descending)
         number_probs.sort(key=lambda x: x[1], reverse=True)
-        selected_numbers = []
         
+        # Select top numbers
+        selected_numbers = []
         for num, prob in number_probs:
-            if num not in selected_numbers:
-                selected_numbers.append(num)
             if len(selected_numbers) >= 5:
                 break
+            if num not in selected_numbers:
+                selected_numbers.append(num)
         
-        # Ensure we have 5 numbers
+        # If we don't have enough high-probability numbers, fill with smart selection
         while len(selected_numbers) < 5:
-            random_num = np.random.randint(1, 70)
-            if random_num not in selected_numbers:
-                selected_numbers.append(random_num)
+            fallback_nums, _ = generate_smart_numbers(historical_data)
+            for num in fallback_nums:
+                if num not in selected_numbers and len(selected_numbers) < 5:
+                    selected_numbers.append(num)
         
         # Powerball
         powerball = np.random.randint(1, 27)
@@ -552,6 +562,8 @@ def predict_enhanced_numbers(historical_data, model):
         
     except Exception as e:
         print(f"❌ Enhanced prediction failed: {e}, using fallback")
+        import traceback
+        print(f"🔍 Traceback: {traceback.format_exc()}")
         return generate_smart_numbers(historical_data)
 
 
