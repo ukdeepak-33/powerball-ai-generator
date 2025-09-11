@@ -416,16 +416,9 @@ def train_enhanced_model(historical_data: list):
         Creates a feature matrix (X) for model training.
         This function has been corrected to avoid the 'level' keyword.
         """
-        # Create a new DataFrame with just the white ball numbers
         white_balls_df = df[['Number 1', 'Number 2', 'Number 3', 'Number 4', 'Number 5']]
-        
-        # Melt the DataFrame to have one number per row for one-hot encoding
         melted_df = white_balls_df.melt(value_name='Number').drop(columns='variable')
-        
-        # One-hot encode the numbers, then group by original index to sum counts
         X = pd.get_dummies(melted_df, columns=['Number'], prefix='', prefix_sep='').groupby(melted_df.index).sum()
-        
-        # Rename columns to be descriptive features
         X.columns = [f'num_present_{col}' for col in X.columns]
         return X
 
@@ -434,11 +427,9 @@ def train_enhanced_model(historical_data: list):
     # Prepare target variable (y) for multi-label classification
     white_balls_list = historical_data[['Number 1', 'Number 2', 'Number 3', 'Number 4', 'Number 5']].values.tolist()
     
-    # Use MultiLabelBinarizer to create the binary matrix for the white balls
     mlb = MultiLabelBinarizer(classes=range(1, 70))
     y_white_balls = mlb.fit_transform(white_balls_list)
     
-    # Align the number of samples between X and y
     if X.shape[0] != y_white_balls.shape[0]:
         min_samples = min(X.shape[0], y_white_balls.shape[0])
         X = X[:min_samples]
@@ -446,25 +437,15 @@ def train_enhanced_model(historical_data: list):
 
     print(f"✅ Data prepared: X shape {X.shape}, y shape {y_white_balls.shape}")
 
-    # Initialize a base classifier and wrap it in a MultiOutputClassifier
     base_classifier = GradientBoostingClassifier(n_estimators=100, learning_rate=0.1, max_depth=3, random_state=42)
     model = MultiOutputClassifier(base_classifier, n_jobs=-1)
 
     try:
-        # Fit the model
         model.fit(X, y_white_balls)
-        
-        # Save the model
         model_path = "enhanced_model.joblib"
         joblib.dump(model, model_path)
         print("✅ Enhanced model trained and saved successfully.")
         return model
-
-    except Exception as e:
-        print(f"❌ Error training enhanced model: {e}")
-        import traceback
-        print("🔍 Traceback:", traceback.format_exc())
-        return None
 
     except Exception as e:
         print(f"❌ Error training enhanced model: {e}")
