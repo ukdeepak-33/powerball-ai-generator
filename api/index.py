@@ -2,6 +2,9 @@
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, HTMLResponse
+from sklearn.ensemble import GradientBoostingClassifier
+from sklearn.model_selection import train_test_split
+from sklearn.multioutput import MultiOutputClassifier
 from collections import defaultdict, Counter
 from typing import Dict, List, Any, Set, Tuple
 from supabase import create_client, Client
@@ -382,6 +385,213 @@ def format_pattern_analysis(pattern_history: Dict[str, Any]) -> str:
     
     return "\n".join(analysis_lines)
 
+def load_or_train_model(historical_data):
+    """Load existing model or train a new one with version compatibility"""
+    model_path = 'enhanced_model.joblib'
+    
+    try:
+        # Try to load existing model
+        model = joblib.load(model_path)
+        print("✅ Enhanced ML model loaded successfully!")
+        return model
+    except (FileNotFoundError, Exception) as e:
+        print(f"⚠ No enhanced model found or version issue: {e}. Training new model...")
+        return train_enhanced_model(historical_data)
+
+def train_enhanced_model(historical_data):
+    """Train a new enhanced model with version compatibility"""
+    try:
+        df = pd.DataFrame(historical_data)
+        if len(df) < 50:  # Need sufficient data
+            print("⚠ Not enough data for training enhanced model")
+            return None
+        
+        # Prepare enhanced features
+        engineered_data = prepare_enhanced_features(df)
+        
+        # Prepare features and labels
+        feature_columns = [
+            'group_a_count', 'odd_count', 'sum_white', 'std_dev', 'range',
+            'prime_count'
+        ] + [f'decade_{i}' for i in range(7)] + [f'last_digit_{i}' for i in range(10)]
+        
+        X = engineered_data[feature_columns].fillna(0)
+        
+        # Create multi-label target (which numbers appear)
+        white_ball_columns = ['Number 1', 'Number 2', 'Number 3', 'Number 4', 'Number 5']
+        y = np.zeros((len(df), 69))  # 69 possible white balls
+        
+        for i, row in df.iterrows():
+            for col in white_ball_columns:
+                num = row[col]
+                if 1 <= num <= 69:
+                    y[i, num-1] = 1  # One-hot encoding
+        
+        # Train-test split
+        X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
+        
+        # Use simpler model for better compatibility
+        model = GradientBoostingClassifier(
+            n_estimators=50,  # Reduced for faster training
+            learning_rate=0.1,
+            max_depth=3,      # Reduced for compatibility
+            random_state=42
+        )
+        
+        # Train model
+        model.fit(X_train, y_train)
+        
+        # Save the model
+        joblib.dump(model, 'enhanced_model.joblib')
+        
+        print(f"✅ Enhanced model trained successfully! Accuracy: {model.score(X_test, y_test):.3f}")
+        return model
+        
+    except Exception as e:
+        print(f"❌ Error training enhanced model: {e}")
+        return None
+
+def prepare_enhanced_features(draws_df: pd.DataFrame) -> pd.DataFrame:
+    """Enhanced feature engineering"""
+    white_ball_columns = ['Number 1', 'Number 2', 'Number 3', 'Number 4', 'Number 5']
+    
+    df = draws_df.copy()
+    
+    # Basic features
+    df['group_a_count'] = df[white_ball_columns].apply(
+        lambda x: sum(1 for num in x if num in GROUP_A_NUMBERS), axis=1
+    )
+    df['odd_count'] = df[white_ball_columns].apply(
+        lambda x: sum(1 for num in x if num % 2 == 1), axis=1
+    )
+    df['sum_white'] = df[white_ball_columns].sum(axis=1)
+    
+    # Advanced features
+    df['std_dev'] = df[white_ball_columns].std(axis=1)
+    df['range'] = df[white_ball_columns].max(axis=1) - df[white_ball_columns].min(axis=1)
+    
+    # Decade distribution
+    for decade in range(7):  # 0-6 for decades 1-70
+        df[f'decade_{decade}'] = df[white_ball_columns].apply(
+            lambda x: sum(1 for num in x if (num-1)//10 == decade), axis=1
+        )
+    
+    # Last digit patterns
+    for digit in range(10):
+        df[f'last_digit_{digit}'] = df[white_ball_columns].apply(
+            lambda x: sum(1 for num in x if num % 10 == digit), axis=1
+        )
+    
+    # Prime numbers count
+    def is_prime(n):
+        if n < 2:
+            return False
+        for i in range(2, int(n**0.5) + 1):
+            if n % i == 0:
+                return False
+        return True
+    
+    df['prime_count'] = df[white_ball_columns].apply(
+        lambda x: sum(1 for num in x if is_prime(num)), axis=1
+    )
+    
+    return df
+
+def predict_enhanced_numbers(historical_data, model):
+    """Generate numbers using enhanced prediction"""
+    if model is None:
+        return generate_smart_numbers(historical_data)
+    
+    try:
+        # Use recent draws for prediction
+        recent_draws = historical_data[-5:] if len(historical_data) >= 5 else historical_data
+        recent_df = pd.DataFrame(recent_draws)
+        
+        # Prepare features
+        features = prepare_enhanced_features(recent_df)
+        feature_columns = [col for col in features.columns if col not in ['Draw Date', 'Powerball']]
+        
+        # Average features across recent draws
+        avg_features = features[feature_columns].mean().values.reshape(1, -1)
+        
+        # Get predictions
+        probabilities = model.predict_proba(avg_features)
+        
+        # Process probabilities to select numbers
+        number_probs = []
+        for i in range(69):
+            number = i + 1
+            # Handle different probability array structures
+            if isinstance(probabilities, list) and i < len(probabilities):
+                prob = probabilities[i][0, 1]  # Probability this number appears
+            else:
+                # Fallback: use simple frequency
+                prob = 0.01
+            number_probs.append((number, prob))
+        
+        # Select top 5 numbers by probability
+        number_probs.sort(key=lambda x: x[1], reverse=True)
+        selected_numbers = []
+        
+        for num, prob in number_probs:
+            if num not in selected_numbers:
+                selected_numbers.append(num)
+            if len(selected_numbers) >= 5:
+                break
+        
+        # Ensure we have 5 numbers
+        while len(selected_numbers) < 5:
+            random_num = np.random.randint(1, 70)
+            if random_num not in selected_numbers:
+                selected_numbers.append(random_num)
+        
+        # Powerball
+        powerball = np.random.randint(1, 27)
+        
+        return sorted(selected_numbers), powerball
+        
+    except Exception as e:
+        print(f"❌ Enhanced prediction failed: {e}, using fallback")
+        return generate_smart_numbers(historical_data)
+
+
+def generate_smart_numbers(historical_data):
+    """Smart fallback number generation"""
+    # Analyze historical frequencies
+    all_numbers = []
+    for draw in historical_data:
+        all_numbers.extend([draw['Number 1'], draw['Number 2'], draw['Number 3'], 
+                          draw['Number 4'], draw['Number 5']])
+    
+    number_counts = Counter(all_numbers)
+    
+    # Weighted selection based on frequency
+    numbers, counts = zip(*number_counts.items())
+    total = sum(counts)
+    weights = [count/total for count in counts]
+    
+    selected_numbers = []
+    while len(selected_numbers) < 5:
+        num = np.random.choice(numbers, p=weights)
+        if num not in selected_numbers:
+            selected_numbers.append(num)
+    
+    powerball = np.random.randint(1, 27)
+    
+    return sorted(selected_numbers), powerball
+
+# Update the global model loading
+try:
+    # Try to load enhanced model first
+    historical_data = fetch_historical_draws(limit=100)
+    MODEL = load_or_train_model(historical_data)
+    if MODEL is None:
+        print("⚠ Using smart number generation instead of ML model")
+except Exception as e:
+    print(f"❌ Model loading failed: {e}")
+    MODEL = None
+
+
 
 def get_2025_frequencies(white_balls, powerball, historical_data):
     """Get frequency counts for numbers in 2025 only"""
@@ -565,6 +775,38 @@ async def analyze_trends():
         
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Analysis error: {str(e)}")
+
+# Add model retraining endpoint
+@app.post("/retrain-model")
+async def retrain_model():
+    """Retrain the ML model with latest data"""
+    try:
+        historical_data = fetch_historical_draws(limit=1000)
+        if not historical_data or len(historical_data) < 50:
+            return JSONResponse({"error": "Not enough data for training"})
+        
+        global MODEL
+        MODEL = train_enhanced_model(historical_data)
+        
+        if MODEL:
+            return JSONResponse({
+                "success": True,
+                "message": "Model retrained successfully",
+                "training_samples": len(historical_data)
+            })
+        else:
+            return JSONResponse({"error": "Model training failed"})
+            
+    except Exception as e:
+        return JSONResponse({"error": str(e)})
+
+# Update the predict_numbers function to use enhanced prediction
+def predict_numbers(historical_data):
+    """Use enhanced ML model to predict numbers"""
+    if MODEL is None:
+        return generate_smart_numbers(historical_data)
+    
+    return predict_enhanced_numbers(historical_data, MODEL)
 
 @app.get("/test-patterns")
 async def test_patterns():
