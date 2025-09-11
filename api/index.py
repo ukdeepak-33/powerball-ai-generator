@@ -734,10 +734,7 @@ async def generate_numbers():
                 "white_balls": [int(x) for x in white_balls],
                 "powerball": int(powerball),
             },
-            
-           "analysis": json_compatible_analysis
-        })
-           
+   
            "analysis": {
                 "group_a_count": int(group_a_count),
                 "odd_even_ratio": f"{int(odd_count)} odd, {5 - int(odd_count)} even",
