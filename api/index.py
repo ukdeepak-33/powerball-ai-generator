@@ -9,6 +9,7 @@ from collections import defaultdict, Counter
 from typing import Dict, List, Any, Set, Tuple, Optional
 from supabase import create_client, Client
 import json
+import pandas as pd
 import numpy as np
 import os
 from dotenv import load_dotenv
