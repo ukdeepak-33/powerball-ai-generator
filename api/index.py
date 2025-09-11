@@ -397,26 +397,38 @@ def load_or_train_model(historical_data):
         print(f"⚠ No enhanced model found or version issue: {e}. Training new model...")
         return train_enhanced_model(historical_data)
 
-def train_enhanced_model(historical_data: pd.DataFrame):
+def train_enhanced_model(historical_data: List[Dict[str, Any]]):
     """
     Trains a multi-label classification model on historical data.
     """
     print("🤖 Training enhanced model...")
-    
+
+    # Convert the list of dictionaries to a pandas DataFrame
+    if isinstance(historical_data, list):
+        historical_data = pd.DataFrame(historical_data)
+        
     # Drop rows with NaN values to ensure consistent sample count
     historical_data = historical_data.dropna()
 
     # Create features (X) based on previous draw properties
+    # The original code for create_features() goes here. This is a placeholder.
+    # Placeholder for the actual feature creation logic.
+    def create_features(df):
+        # A simple feature example: one-hot encode the numbers from the last draw
+        X = pd.get_dummies(df[['Number 1', 'Number 2', 'Number 3', 'Number 4', 'Number 5']].stack()).sum(level=0)
+        X.columns = [f'num_present_{col}' for col in X.columns]
+        return X
+
     X = create_features(historical_data)
 
     # Prepare target variable (y) for multi-label classification
     # This involves converting drawn numbers into a binary matrix
     white_balls_list = historical_data[['Number 1', 'Number 2', 'Number 3', 'Number 4', 'Number 5']].values.tolist()
-    
+
     # Use MultiLabelBinarizer to create the binary matrix for the white balls
     mlb = MultiLabelBinarizer(classes=range(1, 70))
     y_white_balls = mlb.fit_transform(white_balls_list)
-    
+
     # Align the number of samples between X and y
     if X.shape[0] != y_white_balls.shape[0]:
         min_samples = min(X.shape[0], y_white_balls.shape[0])
@@ -433,7 +445,7 @@ def train_enhanced_model(historical_data: pd.DataFrame):
     try:
         # Fit the model
         model.fit(X, y_white_balls)
-        
+
         # Save the model
         model_path = "enhanced_model.joblib"
         joblib.dump(model, model_path)
@@ -445,7 +457,6 @@ def train_enhanced_model(historical_data: pd.DataFrame):
         import traceback
         print("🔍 Traceback:", traceback.format_exc())
         return None
-
 def prepare_enhanced_features(draws_df: pd.DataFrame) -> pd.DataFrame:
     """Enhanced feature engineering"""
     white_ball_columns = ['Number 1', 'Number 2', 'Number 3', 'Number 4', 'Number 5']
