@@ -6,16 +6,14 @@ from sklearn.ensemble import GradientBoostingClassifier
 from sklearn.model_selection import train_test_split
 from sklearn.multioutput import MultiOutputClassifier
 from collections import defaultdict, Counter
-from typing import Dict, List, Any, Set, Tuple
+from typing import Dict, List, Any, Set, Tuple, Optional
 from supabase import create_client, Client
-import pandas as pd
+import json
 import numpy as np
 import os
 from dotenv import load_dotenv
 import joblib
-from typing import List, Optional
 from pathlib import Path
-from collections import Counter
 
 # Load environment variables
 load_dotenv()
@@ -398,66 +396,54 @@ def load_or_train_model(historical_data):
         print(f"⚠ No enhanced model found or version issue: {e}. Training new model...")
         return train_enhanced_model(historical_data)
 
-def train_enhanced_model(historical_data):
-    """Train a new enhanced model with proper single-output approach"""
+def train_enhanced_model(historical_data: pd.DataFrame):
+    """
+    Trains a multi-label classification model on historical data.
+    """
+    print("🤖 Training enhanced model...")
+    
+    # Drop rows with NaN values to ensure consistent sample count
+    historical_data = historical_data.dropna()
+
+    # Create features (X) based on previous draw properties
+    X = create_features(historical_data)
+
+    # Prepare target variable (y) for multi-label classification
+    # This involves converting drawn numbers into a binary matrix
+    white_balls_list = historical_data[['Number 1', 'Number 2', 'Number 3', 'Number 4', 'Number 5']].values.tolist()
+    
+    # Use MultiLabelBinarizer to create the binary matrix for the white balls
+    mlb = MultiLabelBinarizer(classes=range(1, 70))
+    y_white_balls = mlb.fit_transform(white_balls_list)
+    
+    # Align the number of samples between X and y
+    if X.shape[0] != y_white_balls.shape[0]:
+        min_samples = min(X.shape[0], y_white_balls.shape[0])
+        X = X[:min_samples]
+        y_white_balls = y_white_balls[:min_samples]
+
+    print(f"✅ Data prepared: X shape {X.shape}, y shape {y_white_balls.shape}")
+
+    # Initialize a base classifier (e.g., GradientBoostingClassifier)
+    # and wrap it in a MultiOutputClassifier
+    base_classifier = GradientBoostingClassifier(n_estimators=100, learning_rate=0.1, max_depth=3, random_state=42)
+    model = MultiOutputClassifier(base_classifier, n_jobs=-1)
+
     try:
-        df = pd.DataFrame(historical_data)
-        if len(df) < 50:
-            print("⚠ Not enough data for training enhanced model")
-            return None
-        
-        # Prepare enhanced features
-        engineered_data = prepare_enhanced_features(df)
-        
-        # Prepare features
-        feature_columns = [
-            'group_a_count', 'odd_count', 'sum_white', 'std_dev', 'range',
-            'prime_count'
-        ] + [f'decade_{i}' for i in range(7)] + [f'last_digit_{i}' for i in range(10)]
-        
-        X = engineered_data[feature_columns].fillna(0)
-        
-        # Instead of multi-label, let's predict the MOST LIKELY numbers
-        # by analyzing frequency patterns
-        
-        # Get frequency of each number in historical data
-        white_ball_columns = ['Number 1', 'Number 2', 'Number 3', 'Number 4', 'Number 5']
-        all_numbers = []
-        for _, row in df.iterrows():
-            for col in white_ball_columns:
-                all_numbers.append(row[col])
-        
-        number_counts = Counter(all_numbers)
-        
-        # Create target: whether a number is above average frequency
-        avg_frequency = np.mean(list(number_counts.values()))
-        y = np.array([1 if number_counts.get(i+1, 0) > avg_frequency else 0 
-                     for i in range(69)])
-        
-        # Train model to predict high-frequency numbers
-        model = GradientBoostingClassifier(
-            n_estimators=50,
-            learning_rate=0.1,
-            max_depth=3,
-            random_state=42
-        )
-        
-        model.fit(X, y)
+        # Fit the model
+        model.fit(X, y_white_balls)
         
         # Save the model
-        joblib.dump(model, 'enhanced_model.joblib')
-        
-        # Calculate accuracy
-        accuracy = model.score(X, y)
-        print(f"✅ Enhanced model trained successfully! Accuracy: {accuracy:.3f}")
+        model_path = "enhanced_model.joblib"
+        joblib.dump(model, model_path)
+        print("✅ Enhanced model trained and saved successfully.")
         return model
-        
+
     except Exception as e:
         print(f"❌ Error training enhanced model: {e}")
         import traceback
-        print(f"🔍 Traceback: {traceback.format_exc()}")
+        print("🔍 Traceback:", traceback.format_exc())
         return None
-
 
 def prepare_enhanced_features(draws_df: pd.DataFrame) -> pd.DataFrame:
     """Enhanced feature engineering"""
@@ -566,6 +552,18 @@ def predict_enhanced_numbers(historical_data, model):
         print(f"🔍 Traceback: {traceback.format_exc()}")
         return generate_smart_numbers(historical_data)
 
+def convert_numpy_types(data: Any) -> Any:
+    """Recursively converts numpy data types to standard Python types."""
+    if isinstance(data, dict):
+        return {convert_numpy_types(key): convert_numpy_types(value) for key, value in data.items()}
+    elif isinstance(data, list):
+        return [convert_numpy_types(element) for element in data]
+    elif isinstance(data, (np.integer, np.floating)):
+        return int(data) if isinstance(data, np.integer) else float(data)
+    elif isinstance(data, np.ndarray):
+        return data.tolist()
+    else:
+        return data
 
 def generate_smart_numbers(historical_data):
     """Smart fallback number generation"""
@@ -731,12 +729,13 @@ async def generate_numbers():
         pattern_analysis = format_pattern_analysis(pattern_history)
         print(f"📊 Pattern analysis complete")
         
-        return JSONResponse({
+        return JSONResponse(content={
             "generated_numbers": {
-                "white_balls": [int(num) for num in white_balls],
-                "powerball": int(powerball)
+                "white_balls": [int(x) for x in white_balls],
+                "powerball": int(powerball),
             },
-            "analysis": {
+           
+            "analysis": json_compatible_analysis {
                 "group_a_count": int(group_a_count),
                 "odd_even_ratio": f"{int(odd_count)} odd, {5 - int(odd_count)} even",
                 "total_numbers_generated": len(white_balls),
@@ -752,12 +751,12 @@ async def generate_numbers():
                 "pattern_analysis": pattern_analysis
             }
         })
+        
     except Exception as e:
-        print(f"❌ Error in generate_numbers: {str(e)}")
+        print(f"❌ Error in generate_numbers: {e}")
         import traceback
-        print(f"🔍 Traceback: {traceback.format_exc()}")
-        raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
-
+        return JSONResponse(content={"error": str(e), "traceback": traceback.format_exc()}, status_code=500)
+        
 @app.get("/analyze")
 async def analyze_trends():
     """Analyze historical trends"""
