@@ -153,7 +153,7 @@ def fetch_2025_draws() -> List[dict]:
         print(f"Error fetching 2025 data: {e}")
         return []
 
-def fetch_historical_draws() -> List[dict]:
+def fetch_historical_draws(limit: int = 2000) -> List[dict]:
     """Fetches historical draws from Supabase"""
     try:
         response = supabase.table(SUPABASE_TABLE_NAME) \
