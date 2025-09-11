@@ -2,17 +2,20 @@
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, HTMLResponse
+from sklearn.ensemble import GradientBoostingClassifier
+from sklearn.model_selection import train_test_split
+from sklearn.multioutput import MultiOutputClassifier
+from sklearn.preprocessing import MultiLabelBinarizer
 from collections import defaultdict, Counter
-from typing import Dict, List, Any, Set, Tuple
+from typing import Dict, List, Any, Set, Tuple, Optional
 from supabase import create_client, Client
+import json
 import pandas as pd
 import numpy as np
 import os
 from dotenv import load_dotenv
 import joblib
-from typing import List, Optional
 from pathlib import Path
-from collections import Counter
 
 # Load environment variables
 load_dotenv()
@@ -150,7 +153,7 @@ def fetch_2025_draws() -> List[dict]:
         print(f"Error fetching 2025 data: {e}")
         return []
 
-def fetch_historical_draws(limit: int = 1000) -> List[dict]:
+def fetch_historical_draws(limit: int = 2000) -> List[dict]:
     """Fetches historical draws from Supabase"""
     try:
         response = supabase.table(SUPABASE_TABLE_NAME) \
@@ -382,12 +385,235 @@ def format_pattern_analysis(pattern_history: Dict[str, Any]) -> str:
     
     return "\n".join(analysis_lines)
 
+def load_or_train_model(historical_data):
+    """Load existing model or train a new one with version compatibility"""
+    model_path = 'enhanced_model.joblib'
+    
+    try:
+        # Try to load existing model
+        model = joblib.load(model_path)
+        print("✅ Enhanced ML model loaded successfully!")
+        return model
+    except (FileNotFoundError, Exception) as e:
+        print(f"⚠ No enhanced model found or version issue: {e}. Training new model...")
+        return train_enhanced_model(historical_data)
+
+def train_enhanced_model(historical_data: list):
+    """
+    Trains a multi-label classification model on historical data.
+    """
+    print("🤖 Training enhanced model...")
+
+    # Convert the list of dictionaries to a pandas DataFrame
+    if isinstance(historical_data, list):
+        historical_data = pd.DataFrame(historical_data)
+
+    # Drop rows with NaN values to ensure consistent sample count
+    historical_data = historical_data.dropna()
+
+    def create_features(df):
+        """
+        Creates a feature matrix (X) for model training.
+        This function has been corrected to avoid the 'level' keyword.
+        """
+        white_balls_df = df[['Number 1', 'Number 2', 'Number 3', 'Number 4', 'Number 5']]
+        melted_df = white_balls_df.melt(value_name='Number').drop(columns='variable')
+        X = pd.get_dummies(melted_df, columns=['Number'], prefix='', prefix_sep='').groupby(melted_df.index).sum()
+        X.columns = [f'num_present_{col}' for col in X.columns]
+        return X
+
+    X = create_features(historical_data)
+
+    # Prepare target variable (y) for multi-label classification
+    white_balls_list = historical_data[['Number 1', 'Number 2', 'Number 3', 'Number 4', 'Number 5']].values.tolist()
+    
+    mlb = MultiLabelBinarizer(classes=range(1, 70))
+    y_white_balls = mlb.fit_transform(white_balls_list)
+    
+    if X.shape[0] != y_white_balls.shape[0]:
+        min_samples = min(X.shape[0], y_white_balls.shape[0])
+        X = X[:min_samples]
+        y_white_balls = y_white_balls[:min_samples]
+
+    print(f"✅ Data prepared: X shape {X.shape}, y shape {y_white_balls.shape}")
+
+    base_classifier = GradientBoostingClassifier(n_estimators=100, learning_rate=0.1, max_depth=3, random_state=42)
+    model = MultiOutputClassifier(base_classifier, n_jobs=-1)
+
+    try:
+        model.fit(X, y_white_balls)
+        model_path = "enhanced_model.joblib"
+        joblib.dump(model, model_path)
+        print("✅ Enhanced model trained and saved successfully.")
+        return model
+
+    except Exception as e:
+        print(f"❌ Error training enhanced model: {e}")
+        import traceback
+        print("🔍 Traceback:", traceback.format_exc())
+        return None
+
+def prepare_enhanced_features(draws_df: pd.DataFrame) -> pd.DataFrame:
+    """Enhanced feature engineering"""
+    white_ball_columns = ['Number 1', 'Number 2', 'Number 3', 'Number 4', 'Number 5']
+    
+    df = draws_df.copy()
+    
+    # Basic features
+    df['group_a_count'] = df[white_ball_columns].apply(
+        lambda x: sum(1 for num in x if num in GROUP_A_NUMBERS), axis=1
+    )
+    df['odd_count'] = df[white_ball_columns].apply(
+        lambda x: sum(1 for num in x if num % 2 == 1), axis=1
+    )
+    df['sum_white'] = df[white_ball_columns].sum(axis=1)
+    
+    # Advanced features
+    df['std_dev'] = df[white_ball_columns].std(axis=1)
+    df['range'] = df[white_ball_columns].max(axis=1) - df[white_ball_columns].min(axis=1)
+    
+    # Decade distribution
+    for decade in range(7):  # 0-6 for decades 1-70
+        df[f'decade_{decade}'] = df[white_ball_columns].apply(
+            lambda x: sum(1 for num in x if (num-1)//10 == decade), axis=1
+        )
+    
+    # Last digit patterns
+    for digit in range(10):
+        df[f'last_digit_{digit}'] = df[white_ball_columns].apply(
+            lambda x: sum(1 for num in x if num % 10 == digit), axis=1
+        )
+    
+    # Prime numbers count
+    def is_prime(n):
+        if n < 2:
+            return False
+        for i in range(2, int(n**0.5) + 1):
+            if n % i == 0:
+                return False
+        return True
+    
+    df['prime_count'] = df[white_ball_columns].apply(
+        lambda x: sum(1 for num in x if is_prime(num)), axis=1
+    )
+    
+    return df
+
+def predict_enhanced_numbers(historical_data, model):
+    """Generate numbers using enhanced prediction"""
+    if model is None:
+        return generate_smart_numbers(historical_data)
+    
+    try:
+        # Use recent draws for prediction
+        recent_draws = historical_data[-5:] if len(historical_data) >= 5 else historical_data
+        recent_df = pd.DataFrame(recent_draws)
+        
+        # Prepare features
+        features = prepare_enhanced_features(recent_df)
+        feature_columns = [col for col in features.columns if col not in ['Draw Date', 'Powerball']]
+        
+        # Average features across recent draws
+        avg_features = features[feature_columns].mean().values.reshape(1, -1)
+        
+        # Get predictions for which numbers are high-frequency
+        predictions = model.predict(avg_features)[0]
+        
+        # Get probabilities for ranking
+        try:
+            probabilities = model.predict_proba(avg_features)[0]
+            # probabilities is shape (69, 2) - [prob_class_0, prob_class_1] for each number
+            high_freq_probs = probabilities[:, 1]  # Probability of being high-frequency
+        except:
+            # Fallback if predict_proba not available
+            high_freq_probs = predictions.astype(float)
+        
+        # Create list of numbers with their probabilities
+        number_probs = [(i+1, high_freq_probs[i]) for i in range(69)]
+        
+        # Sort by probability (descending)
+        number_probs.sort(key=lambda x: x[1], reverse=True)
+        
+        # Select top numbers
+        selected_numbers = []
+        for num, prob in number_probs:
+            if len(selected_numbers) >= 5:
+                break
+            if num not in selected_numbers:
+                selected_numbers.append(num)
+        
+        # If we don't have enough high-probability numbers, fill with smart selection
+        while len(selected_numbers) < 5:
+            fallback_nums, _ = generate_smart_numbers(historical_data)
+            for num in fallback_nums:
+                if num not in selected_numbers and len(selected_numbers) < 5:
+                    selected_numbers.append(num)
+        
+        # Powerball
+        powerball = np.random.randint(1, 27)
+        
+        return sorted(selected_numbers), powerball
+        
+    except Exception as e:
+        print(f"❌ Enhanced prediction failed: {e}, using fallback")
+        import traceback
+        print(f"🔍 Traceback: {traceback.format_exc()}")
+        return generate_smart_numbers(historical_data)
+
+def convert_numpy_types(data: Any) -> Any:
+    """Recursively converts numpy data types to standard Python types."""
+    if isinstance(data, dict):
+        return {convert_numpy_types(key): convert_numpy_types(value) for key, value in data.items()}
+    elif isinstance(data, list):
+        return [convert_numpy_types(element) for element in data]
+    elif isinstance(data, (np.integer, np.floating)):
+        return int(data) if isinstance(data, np.integer) else float(data)
+    elif isinstance(data, np.ndarray):
+        return data.tolist()
+    else:
+        return data
+
+def generate_smart_numbers(historical_data):
+    """Smart fallback number generation"""
+    # Analyze historical frequencies
+    all_numbers = []
+    for draw in historical_data:
+        all_numbers.extend([draw['Number 1'], draw['Number 2'], draw['Number 3'], 
+                          draw['Number 4'], draw['Number 5']])
+    
+    number_counts = Counter(all_numbers)
+    
+    # Weighted selection based on frequency
+    numbers, counts = zip(*number_counts.items())
+    total = sum(counts)
+    weights = [count/total for count in counts]
+    
+    selected_numbers = []
+    while len(selected_numbers) < 5:
+        num = np.random.choice(numbers, p=weights)
+        if num not in selected_numbers:
+            selected_numbers.append(num)
+    
+    powerball = np.random.randint(1, 27)
+    
+    return sorted(selected_numbers), powerball
+
+# Update the global model loading
+try:
+    # Try to load enhanced model first
+    historical_data = fetch_historical_draws()
+    MODEL = load_or_train_model(historical_data)
+    if MODEL is None:
+        print("⚠ Using smart number generation instead of ML model")
+except Exception as e:
+    print(f"❌ Model loading failed: {e}")
+    MODEL = None
 
 def get_2025_frequencies(white_balls, powerball, historical_data):
     """Get frequency counts for numbers in 2025 only"""
     if not historical_data:
         return {
-            'white_ball_counts': {num: 0 for num in white_balls},
+            'white_ball_counts': {int(num): 0 for num in white_balls},  # Convert to int
             'powerball_count': 0,
             'total_2025_draws': 0
         }
@@ -403,17 +629,21 @@ def get_2025_frequencies(white_balls, powerball, historical_data):
     
     white_ball_counter = Counter(all_white_balls)
     for num in white_balls:
-        white_ball_counts[num] = white_ball_counter.get(num, 0)
+        # Convert numpy numbers to Python integers
+        python_num = int(num)
+        white_ball_counts[python_num] = white_ball_counter.get(python_num, 0)
     
     # Count powerball frequency in 2025
     powerball_counts = Counter(df['Powerball'])
-    powerball_count = powerball_counts.get(powerball, 0)
+    python_powerball = int(powerball)
+    powerball_count = powerball_counts.get(python_powerball, 0)
     
     return {
         'white_ball_counts': white_ball_counts,
         'powerball_count': powerball_count,
         'total_2025_draws': len(df)
     }
+
 
 @app.get("/", response_class=HTMLResponse)
 async def read_root():
@@ -464,7 +694,7 @@ async def generate_numbers():
     try:
         # Fetch historical data
         print("📊 Fetching historical data...")
-        historical_data = fetch_historical_draws(limit=500)
+        historical_data = fetch_historical_draws()
         if not historical_data:
             print("❌ No historical data found")
             raise HTTPException(status_code=404, detail="No historical data found")
@@ -507,12 +737,13 @@ async def generate_numbers():
         pattern_analysis = format_pattern_analysis(pattern_history)
         print(f"📊 Pattern analysis complete")
         
-        return JSONResponse({
+        return JSONResponse(content={
             "generated_numbers": {
-                "white_balls": [int(num) for num in white_balls],
-                "powerball": int(powerball)
+                "white_balls": [int(x) for x in white_balls],
+                "powerball": int(powerball),
             },
-            "analysis": {
+   
+           "analysis": {
                 "group_a_count": int(group_a_count),
                 "odd_even_ratio": f"{int(odd_count)} odd, {5 - int(odd_count)} even",
                 "total_numbers_generated": len(white_balls),
@@ -528,17 +759,17 @@ async def generate_numbers():
                 "pattern_analysis": pattern_analysis
             }
         })
+        
     except Exception as e:
-        print(f"❌ Error in generate_numbers: {str(e)}")
+        print(f"❌ Error in generate_numbers: {e}")
         import traceback
-        print(f"🔍 Traceback: {traceback.format_exc()}")
-        raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
-
+        return JSONResponse(content={"error": str(e), "traceback": traceback.format_exc()}, status_code=500)
+        
 @app.get("/analyze")
 async def analyze_trends():
     """Analyze historical trends"""
     try:
-        historical_data = fetch_historical_draws(limit=1000)
+        historical_data = fetch_historical_draws()
         if not historical_data:
             raise HTTPException(status_code=404, detail="No historical data available for analysis")
         
@@ -566,6 +797,51 @@ async def analyze_trends():
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Analysis error: {str(e)}")
 
+# Add model retraining endpoint
+@app.post("/retrain-model")
+async def retrain_model():
+    """Retrain the ML model with latest data"""
+    try:
+        historical_data = fetch_historical_draws(limit=1000)
+        if not historical_data or len(historical_data) < 50:
+            return JSONResponse({"error": "Not enough data for training"})
+        
+        global MODEL
+        MODEL = train_enhanced_model(historical_data)
+        
+        if MODEL:
+            return JSONResponse({
+                "success": True,
+                "message": "Model retrained successfully",
+                "training_samples": len(historical_data)
+            })
+        else:
+            return JSONResponse({"error": "Model training failed"})
+            
+    except Exception as e:
+        return JSONResponse({"error": str(e)})
+
+# Update the predict_numbers function to use enhanced prediction
+def predict_numbers(historical_data):
+    """Use enhanced ML model to predict numbers"""
+    if MODEL is None:
+        return generate_smart_numbers(historical_data)
+    
+    return predict_enhanced_numbers(historical_data, MODEL)
+
+@app.get("/test-json")
+async def test_json_serialization():
+    """Test endpoint to check JSON serialization works"""
+    test_data = {
+        "numbers": [1, 4, 26, 56, 59],
+        "powerball": 18,
+        "frequencies": {
+            "white_balls": {1: 5, 4: 3, 26: 7, 56: 2, 59: 4},  # Python int keys
+            "powerball": 2
+        }
+    }
+    return JSONResponse(test_data)
+
 @app.get("/test-patterns")
 async def test_patterns():
     """Test endpoint for pattern analysis"""
@@ -579,7 +855,7 @@ async def test_patterns():
         print(f"✅ Patterns detected: {patterns}")
         
         # Get historical data for analysis
-        historical_data = fetch_historical_draws(limit=100)
+        historical_data = fetch_historical_draws()
         print(f"📊 Historical data: {len(historical_data)} records")
         
         # Analyze pattern history
