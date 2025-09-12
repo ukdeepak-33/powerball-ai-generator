@@ -420,26 +420,34 @@ def compare_models(historical_data):
         print(f"❌ Error loading best model: {e}")
         return None
 
+# Updated predict_enhanced_numbers function
 def predict_enhanced_numbers(historical_data, model):
     """Generate numbers using enhanced prediction"""
     if model is None:
         return generate_smart_numbers(historical_data)
     
     try:
+        # Get the most recent draws to create features for prediction
         recent_draws = historical_data[-5:] if len(historical_data) >= 5 else historical_data
         recent_df = pd.DataFrame(recent_draws)
         
+        # Ensure features are correctly formatted with all 69 columns
         features = create_features(recent_df)
         
-        predictions = model.predict(features)[0]
-        
+        # Predict probabilities for each of the 69 numbers
         try:
-            probabilities = model.predict_proba(features)
-            high_freq_probs = probabilities[0][:, 1]
+            # model.predict_proba returns a list of 69 arrays, one for each number
+            probabilities_list = model.predict_proba(features)
+            
+            # Extract the probability of each number being drawn (class 1)
+            high_freq_probs = [prob[0, 1] for prob in probabilities_list]
+            
         except:
+            # Fallback to direct prediction if probabilities are not available
+            predictions = model.predict(features)[0]
             high_freq_probs = predictions.astype(float)
         
-        number_probs = [(i+1, high_freq_probs[i]) for i in range(69)]
+        number_probs = [(i+1, high_freq_probs[i]) for i in range(len(high_freq_probs))]
         number_probs.sort(key=lambda x: x[1], reverse=True)
         
         selected_numbers = []
@@ -463,6 +471,7 @@ def predict_enhanced_numbers(historical_data, model):
         print(f"❌ Enhanced prediction failed: {e}, using fallback")
         print(f"🔍 Traceback: {traceback.format_exc()}")
         return generate_smart_numbers(historical_data)
+
 
 # --- Main Application Logic ---
 
