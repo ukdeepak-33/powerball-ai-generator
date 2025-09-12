@@ -19,6 +19,9 @@ from sklearn.preprocessing import MultiLabelBinarizer
 from sklearn.metrics import jaccard_score
 import traceback
 
+# Get port for Render deployment
+port = int(os.environ.get("PORT", 8000))
+
 # Load environment variables
 load_dotenv()
 
