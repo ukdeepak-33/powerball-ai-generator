@@ -1,4 +1,9 @@
 # api/index.py
+import pandas as pd
+import numpy as np
+import traceback
+import joblib
+import os
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, HTMLResponse
@@ -6,23 +11,12 @@ from sklearn.multioutput import MultiOutputClassifier
 from collections import defaultdict, Counter
 from typing import Dict, List, Any, Set, Tuple, Optional
 from supabase import create_client, Client
-import pandas as pd
-import numpy as np
-import os
 from dotenv import load_dotenv
-import joblib
 from pathlib import Path
-from sklearn.model_selection import train_test_split
 from sklearn.ensemble import GradientBoostingClassifier, RandomForestClassifier
-from sklearn.neural_network import MLPClassifier
-from sklearn.linear_model import LogisticRegression, RidgeClassifier
+from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import MultiLabelBinarizer
 from sklearn.metrics import jaccard_score
-from xgboost import XGBClassifier
-import traceback
-
-# Get port for Render deployment
-port = int(os.environ.get("PORT", 8000))
 
 # Load environment variables
 load_dotenv()
@@ -307,154 +301,39 @@ def generate_smart_numbers(historical_data):
     
     return sorted(selected_numbers), powerball
     
-# --- Model Training and Comparison ---
+# --- Model Training and Prediction ---
 
-# Updated create_features function
 def create_features(df):
     """
-    Creates a feature matrix (X) for model training or prediction.
+    Creates a feature matrix (X) for model prediction.
     Ensures the feature matrix always contains all 69 possible numbers.
     """
     white_balls_df = df[['Number 1', 'Number 2', 'Number 3', 'Number 4', 'Number 5']]
     melted_df = white_balls_df.melt(value_name='Number').drop(columns='variable')
     
-    # One-hot encode the numbers
     X = pd.get_dummies(melted_df, columns=['Number'], prefix='', prefix_sep='').groupby(melted_df.index).sum()
     
-    # Get all possible numbers from 1 to 69
     all_possible_features = [f'num_present_{i}' for i in range(1, 70)]
     
-    # Reindex the DataFrame to ensure all 69 columns exist
-    # Fill any missing columns with zeros.
     X_reindexed = pd.DataFrame(0, index=X.index, columns=all_possible_features)
     X_reindexed.update(X.add_prefix('num_present_'))
     
     return X_reindexed
 
-def train_and_evaluate_model(model_instance, historical_data, model_name):
-    """
-    Trains a multi-output classifier, evaluates its performance, and saves it.
-    This version includes a train-test split for a more rigorous evaluation.
-    
-    Args:
-        model_instance: The base scikit-learn model to use.
-        historical_data (list): The list of historical draw data.
-        model_name (str): The name of the model for logging and file naming.
-    
-    Returns:
-        dict: A dictionary containing the model and its evaluation score.
-    """
-    print(f"\n🤖 Training and evaluating {model_name}...")
-    
-    if isinstance(historical_data, list):
-        df = pd.DataFrame(historical_data)
-    else:
-        df = historical_data
-
-    df = df.dropna()
-    
-    # Create features (X) and target (y)
-    X = create_features(df)
-    white_balls_list = df[['Number 1', 'Number 2', 'Number 3', 'Number 4', 'Number 5']].values.tolist()
-    
-    mlb = MultiLabelBinarizer(classes=range(1, 70))
-    y_white_balls = mlb.fit_transform(white_balls_list)
-    
-    # Align the number of samples
-    min_samples = min(X.shape[0], y_white_balls.shape[0])
-    X = X[:min_samples]
-    y_white_balls = y_white_balls[:min_samples]
-    
-    # --- The key change: Splitting the data ---
-    X_train, X_test, y_train, y_test = train_test_split(
-        X, y_white_balls, test_size=0.2, random_state=42
-    )
-    
-    print(f"✅ Data split: Training on {X_train.shape[0]} samples, testing on {X_test.shape[0]} samples.")
-    
-    # Initialize and fit the multi-output classifier on the TRAINING data
-    model = MultiOutputClassifier(model_instance, n_jobs=-1)
-    model.fit(X_train, y_train)
-    
-    # Make predictions and evaluate on the TESTING data
-    y_pred = model.predict(X_test)
-    score = jaccard_score(y_test, y_pred, average='samples')
-    
-    # Save the trained model
-    model_path = f"enhanced_model_{model_name.lower().replace(' ', '_')}.joblib"
-    joblib.dump(model, model_path)
-    
-    print(f"✅ {model_name} trained and saved with Jaccard Score on Test Data: {score:.4f}")
-    
-    return {"model": model, "score": score}
-
-
-def compare_models(historical_data):
-    """
-    Orchestrates the training and comparison of multiple models, including XGBoost.
-    """
-    models_to_test = {
-        "Gradient Boosting": GradientBoostingClassifier(n_estimators=100, learning_rate=0.1, max_depth=3, random_state=42),
-        "Random Forest": RandomForestClassifier(n_estimators=100, random_state=42),
-        "Logistic Regression": LogisticRegression(solver='liblinear', random_state=42),
-        "Ridge Classifier": RidgeClassifier(random_state=42),
-        "MLP Classifier": MLPClassifier(hidden_layer_sizes=(100,), max_iter=200, random_state=42),
-        "XGBoost": XGBClassifier(use_label_encoder=False, eval_metric='logloss', random_state=42)
-    }
-    
-    results = {}
-    best_model_name = ""
-    best_score = -1
-    
-    for name, model_instance in models_to_test.items():
-        try:
-            result = train_and_evaluate_model(model_instance, historical_data, name)
-            results[name] = result["score"]
-            if result["score"] > best_score:
-                best_score = result["score"]
-                best_model_name = name
-        except Exception as e:
-            print(f"❌ Error training {name}: {e}")
-            import traceback
-            traceback.print_exc()
-    
-    print("\n📊 --- Final Model Comparison ---")
-    for name, score in results.items():
-        print(f"  {name}: Jaccard Score = {score:.4f}")
-    print("-----------------------------------")
-    
-    if best_model_name:
-        best_model_path = f"enhanced_model_{best_model_name.lower().replace(' ', '_')}.joblib"
-        try:
-            best_model = joblib.load(best_model_path)
-            print(f"✅ Best model ({best_model_name}) loaded successfully.")
-            return best_model
-        except Exception as e:
-            print(f"❌ Error loading best model: {e}")
-    return None
-
-def predict_enhanced_numbers(historical_data, model):
-    """Generate numbers using enhanced prediction"""
+def predict_with_model(historical_data, model):
+    """Get predictions for white balls and powerball from a single model."""
     if model is None:
         return generate_smart_numbers(historical_data)
-    
+        
     try:
-        # Get the most recent draws to create features for prediction
         recent_draws = historical_data[-5:] if len(historical_data) >= 5 else historical_data
         recent_df = pd.DataFrame(recent_draws)
-        
-        # Ensure features are correctly formatted with all 69 columns
         features = create_features(recent_df)
         
-        # Predict probabilities for each of the 69 numbers
         if hasattr(model, 'predict_proba'):
-            # model.predict_proba returns a list of 69 arrays, one for each number
             probabilities_list = model.predict_proba(features)
-            
-            # Extract the probability of each number being drawn (class 1)
             high_freq_probs = [prob[0, 1] for prob in probabilities_list]
         else:
-            # Fallback to direct prediction if probabilities are not available
             predictions = model.predict(features)[0]
             high_freq_probs = predictions.astype(float)
         
@@ -468,44 +347,79 @@ def predict_enhanced_numbers(historical_data, model):
             if num not in selected_numbers:
                 selected_numbers.append(num)
         
-        while len(selected_numbers) < 5:
-            fallback_nums, _ = generate_smart_numbers(historical_data)
-            for num in fallback_nums:
-                if num not in selected_numbers and len(selected_numbers) < 5:
-                    selected_numbers.append(num)
-        
         powerball = np.random.randint(1, 27)
         
         return sorted(selected_numbers), powerball
         
     except Exception as e:
-        print(f"❌ Enhanced prediction failed: {e}, using fallback")
-        print(f"🔍 Traceback: {traceback.format_exc()}")
+        print(f"❌ Prediction failed for a model: {e}, using fallback")
         return generate_smart_numbers(historical_data)
 
+# Keep a log of which predictions were closer to actual draws
+performance_log = {
+    'random_forest_wins': 0,
+    'gradient_boosting_wins': 0,
+    'ties': 0
+}
+
+def ensemble_prediction(historical_data, rf_model, gb_model):
+    """Get predictions from both models and combine them using a simple voting ensemble."""
+    print("🧠 Using ensemble model for prediction...")
+    
+    rf_pred_white_balls, rf_pred_powerball = predict_with_model(historical_data, rf_model)
+    gb_pred_white_balls, gb_pred_powerball = predict_with_model(historical_data, gb_model)
+    
+    # Combine white ball predictions
+    combined_numbers_counter = Counter(rf_pred_white_balls + gb_pred_white_balls)
+    sorted_combined_numbers = [num for num, count in combined_numbers_counter.most_common()]
+    
+    final_white_balls = sorted(sorted_combined_numbers[:5])
+    
+    # Combine powerball predictions using a simple average (if applicable)
+    final_powerball = int(np.round((rf_pred_powerball + gb_pred_powerball) / 2))
+    
+    return final_white_balls, final_powerball
 
 # --- Main Application Logic ---
 
-# Initial model loading and training
 print("🚀 Starting application...")
-MODEL = None
+RF_MODEL = None
+GB_MODEL = None
+
 try:
     historical_data_for_training = fetch_historical_draws(limit=2000)
     if historical_data_for_training:
-        print(f"✅ Fetched {len(historical_data_for_training)} records for model loading/training.")
+        print(f"✅ Fetched {len(historical_data_for_training)} records for model loading.")
+        
         try:
-            MODEL = joblib.load('enhanced_model_random_forest.joblib')
-            print("✅ Trained Random Forest model loaded successfully!")
+            RF_MODEL = joblib.load('enhanced_model_random_forest.joblib')
+            print("✅ Trained Random Forest model loaded.")
         except FileNotFoundError:
-            print("⚠ Random Forest model not found. Starting model training and comparison...")
-            MODEL = compare_models(historical_data_for_training)
+            print("⚠ Random Forest model not found. Training it now...")
+            rf_instance = RandomForestClassifier(n_estimators=100, random_state=42)
+            RF_MODEL = MultiOutputClassifier(rf_instance, n_jobs=-1)
+            X = create_features(pd.DataFrame(historical_data_for_training))
+            y_white_balls = MultiLabelBinarizer(classes=range(1, 70)).fit_transform(pd.DataFrame(historical_data_for_training)[['Number 1', 'Number 2', 'Number 3', 'Number 4', 'Number 5']].values.tolist())
+            RF_MODEL.fit(X, y_white_balls)
+            joblib.dump(RF_MODEL, 'enhanced_model_random_forest.joblib')
+        
+        try:
+            GB_MODEL = joblib.load('enhanced_model_gradient_boosting.joblib')
+            print("✅ Trained Gradient Boosting model loaded.")
+        except FileNotFoundError:
+            print("⚠ Gradient Boosting model not found. Training it now...")
+            gb_instance = GradientBoostingClassifier(n_estimators=100, learning_rate=0.1, max_depth=3, random_state=42)
+            GB_MODEL = MultiOutputClassifier(gb_instance, n_jobs=-1)
+            X = create_features(pd.DataFrame(historical_data_for_training))
+            y_white_balls = MultiLabelBinarizer(classes=range(1, 70)).fit_transform(pd.DataFrame(historical_data_for_training)[['Number 1', 'Number 2', 'Number 3', 'Number 4', 'Number 5']].values.tolist())
+            GB_MODEL.fit(X, y_white_balls)
+            joblib.dump(GB_MODEL, 'enhanced_model_gradient_boosting.joblib')
     else:
         print("❌ No historical data found for model training.")
+
 except Exception as e:
-    print(f"❌ Initial model loading failed: {e}")
+    print(f"❌ Initial model loading or training failed: {e}")
     print(f"🔍 Traceback: {traceback.format_exc()}")
-    print("⚠ Using random generation as a fallback.")
-    MODEL = None
 
 @app.get("/", response_class=HTMLResponse)
 async def read_root():
@@ -562,8 +476,8 @@ async def generate_numbers():
         
         print(f"✅ Found {len(historical_data)} historical draws")
         
-        print("🤖 Generating numbers with ML model...")
-        white_balls, powerball = predict_enhanced_numbers(historical_data, MODEL)
+        print("🤖 Generating numbers with ML model ensemble...")
+        white_balls, powerball = ensemble_prediction(historical_data, RF_MODEL, GB_MODEL)
         print(f"✅ Generated numbers: {white_balls}, Powerball: {powerball}")
         
         print("📅 Fetching 2025 data...")
@@ -593,7 +507,8 @@ async def generate_numbers():
                 "powerball": freq_2025['powerball_count'],
                 "total_draws_2025": freq_2025['total_2025_draws']
             },
-            "pattern_analysis": pattern_analysis
+            "pattern_analysis": pattern_analysis,
+            "performance_log": performance_log
         }
         
         return JSONResponse(content={
