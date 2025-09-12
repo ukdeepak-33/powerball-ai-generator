@@ -303,21 +303,25 @@ def generate_smart_numbers(historical_data):
     
 # --- Model Training and Prediction ---
 
-def create_features(df):
+def create_features(historical_data):
     """
-    Creates a feature matrix (X) for model prediction.
+    Creates a feature matrix (X) for model prediction from raw historical data.
     Ensures the feature matrix always contains all 69 possible numbers.
     """
-    white_balls_df = df[['Number 1', 'Number 2', 'Number 3', 'Number 4', 'Number 5']]
-    melted_df = white_balls_df.melt(value_name='Number').drop(columns='variable')
+    df = pd.DataFrame(historical_data)
+    white_balls_list = df[['Number 1', 'Number 2', 'Number 3', 'Number 4', 'Number 5']].values.tolist()
     
-    X = pd.get_dummies(melted_df, columns=['Number'], prefix='', prefix_sep='').groupby(melted_df.index).sum()
+    # Create a list of dictionaries for one-hot encoding
+    features = []
+    for draw in white_balls_list:
+        feature_dict = {f'num_{i}': 1 for i in draw}
+        features.append(feature_dict)
     
-    all_possible_features = [f'num_present_{i}' for i in range(1, 70)]
-    
+    # Convert to DataFrame and handle all possible numbers
+    X = pd.DataFrame(features).fillna(0).astype(int)
+    all_possible_features = [f'num_{i}' for i in range(1, 70)]
     X_reindexed = pd.DataFrame(0, index=X.index, columns=all_possible_features)
-    X_reindexed.update(X.add_prefix('num_present_'))
-    
+    X_reindexed.update(X)
     return X_reindexed
 
 def predict_with_model(historical_data, model):
@@ -327,8 +331,9 @@ def predict_with_model(historical_data, model):
         
     try:
         recent_draws = historical_data[-5:] if len(historical_data) >= 5 else historical_data
-        recent_df = pd.DataFrame(recent_draws)
-        features = create_features(recent_df)
+        
+        # Use the corrected create_features function
+        features = create_features(recent_draws)
         
         if hasattr(model, 'predict_proba'):
             probabilities_list = model.predict_proba(features)
@@ -391,6 +396,7 @@ try:
     if historical_data_for_training:
         print(f"✅ Fetched {len(historical_data_for_training)} records for model loading.")
         
+        # Load or train Random Forest
         try:
             RF_MODEL = joblib.load('enhanced_model_random_forest.joblib')
             print("✅ Trained Random Forest model loaded.")
@@ -398,11 +404,12 @@ try:
             print("⚠ Random Forest model not found. Training it now...")
             rf_instance = RandomForestClassifier(n_estimators=100, random_state=42)
             RF_MODEL = MultiOutputClassifier(rf_instance, n_jobs=-1)
-            X = create_features(pd.DataFrame(historical_data_for_training))
+            X = create_features(historical_data_for_training)
             y_white_balls = MultiLabelBinarizer(classes=range(1, 70)).fit_transform(pd.DataFrame(historical_data_for_training)[['Number 1', 'Number 2', 'Number 3', 'Number 4', 'Number 5']].values.tolist())
             RF_MODEL.fit(X, y_white_balls)
             joblib.dump(RF_MODEL, 'enhanced_model_random_forest.joblib')
         
+        # Load or train Gradient Boosting
         try:
             GB_MODEL = joblib.load('enhanced_model_gradient_boosting.joblib')
             print("✅ Trained Gradient Boosting model loaded.")
@@ -410,7 +417,7 @@ try:
             print("⚠ Gradient Boosting model not found. Training it now...")
             gb_instance = GradientBoostingClassifier(n_estimators=100, learning_rate=0.1, max_depth=3, random_state=42)
             GB_MODEL = MultiOutputClassifier(gb_instance, n_jobs=-1)
-            X = create_features(pd.DataFrame(historical_data_for_training))
+            X = create_features(historical_data_for_training)
             y_white_balls = MultiLabelBinarizer(classes=range(1, 70)).fit_transform(pd.DataFrame(historical_data_for_training)[['Number 1', 'Number 2', 'Number 3', 'Number 4', 'Number 5']].values.tolist())
             GB_MODEL.fit(X, y_white_balls)
             joblib.dump(GB_MODEL, 'enhanced_model_gradient_boosting.joblib')
