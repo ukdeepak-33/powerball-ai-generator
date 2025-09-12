@@ -1,4 +1,9 @@
 # api/index.py
+import pandas as pd
+import numpy as np
+import traceback
+import joblib
+import os
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, HTMLResponse
@@ -6,18 +11,15 @@ from sklearn.multioutput import MultiOutputClassifier
 from collections import defaultdict, Counter
 from typing import Dict, List, Any, Set, Tuple, Optional
 from supabase import create_client, Client
-import pandas as pd
-import numpy as np
-import os
 from dotenv import load_dotenv
-import joblib
 from pathlib import Path
+from sklearn.neural_network import MLPClassifier
+from sklearn.linear_model import LogisticRegression, RidgeClassifier
 from sklearn.model_selection import train_test_split
 from sklearn.ensemble import GradientBoostingClassifier, RandomForestClassifier
 from sklearn.linear_model import LogisticRegression
 from sklearn.preprocessing import MultiLabelBinarizer
 from sklearn.metrics import jaccard_score
-import traceback
 
 # Load environment variables
 load_dotenv()
@@ -385,11 +387,15 @@ def train_and_evaluate_model(model_instance, historical_data, model_name):
 
 
 def compare_models(historical_data):
-    """Orchestrates the training and comparison of multiple models."""
+    """
+    Orchestrates the training and comparison of multiple models, including Ridge and MLP.
+    """
     models_to_test = {
         "Gradient Boosting": GradientBoostingClassifier(n_estimators=100, learning_rate=0.1, max_depth=3, random_state=42),
         "Random Forest": RandomForestClassifier(n_estimators=100, random_state=42),
-        "Logistic Regression": LogisticRegression(solver='liblinear', random_state=42)
+        "Logistic Regression": LogisticRegression(solver='liblinear', random_state=42),
+        "Ridge Classifier": RidgeClassifier(random_state=42),
+        "MLP Classifier": MLPClassifier(hidden_layer_sizes=(100,), max_iter=200, random_state=42)
     }
     
     results = {}
@@ -405,20 +411,23 @@ def compare_models(historical_data):
                 best_model_name = name
         except Exception as e:
             print(f"❌ Error training {name}: {e}")
+            import traceback
+            traceback.print_exc()
     
     print("\n📊 --- Final Model Comparison ---")
     for name, score in results.items():
         print(f"  {name}: Jaccard Score = {score:.4f}")
     print("-----------------------------------")
     
-    best_model_path = f"enhanced_model_{best_model_name.lower().replace(' ', '_')}.joblib"
-    try:
-        best_model = joblib.load(best_model_path)
-        print(f"✅ Best model ({best_model_name}) loaded successfully.")
-        return best_model
-    except Exception as e:
-        print(f"❌ Error loading best model: {e}")
-        return None
+    if best_model_name:
+        best_model_path = f"enhanced_model_{best_model_name.lower().replace(' ', '_')}.joblib"
+        try:
+            best_model = joblib.load(best_model_path)
+            print(f"✅ Best model ({best_model_name}) loaded successfully.")
+            return best_model
+        except Exception as e:
+            print(f"❌ Error loading best model: {e}")
+    return None
 
 # Updated predict_enhanced_numbers function
 def predict_enhanced_numbers(historical_data, model):
