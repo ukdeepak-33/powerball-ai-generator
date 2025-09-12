@@ -12,6 +12,7 @@ import os
 from dotenv import load_dotenv
 import joblib
 from pathlib import Path
+from sklearn.model_selection import train_test_split
 from sklearn.ensemble import GradientBoostingClassifier, RandomForestClassifier
 from sklearn.linear_model import LogisticRegression
 from sklearn.preprocessing import MultiLabelBinarizer
@@ -303,16 +304,41 @@ def generate_smart_numbers(historical_data):
     
 # --- Model Training and Comparison ---
 
+# Updated create_features function
 def create_features(df):
-    """Creates a feature matrix (X) for model training."""
+    """
+    Creates a feature matrix (X) for model training or prediction.
+    Ensures the feature matrix always contains all 69 possible numbers.
+    """
     white_balls_df = df[['Number 1', 'Number 2', 'Number 3', 'Number 4', 'Number 5']]
     melted_df = white_balls_df.melt(value_name='Number').drop(columns='variable')
+    
+    # One-hot encode the numbers
     X = pd.get_dummies(melted_df, columns=['Number'], prefix='', prefix_sep='').groupby(melted_df.index).sum()
-    X.columns = [f'num_present_{col}' for col in X.columns]
-    return X
+    
+    # Get all possible numbers from 1 to 69
+    all_possible_features = [f'num_present_{i}' for i in range(1, 70)]
+    
+    # Reindex the DataFrame to ensure all 69 columns exist
+    # Fill any missing columns with zeros.
+    X_reindexed = pd.DataFrame(0, index=X.index, columns=all_possible_features)
+    X_reindexed.update(X.add_prefix('num_present_'))
+    
+    return X_reindexed
 
 def train_and_evaluate_model(model_instance, historical_data, model_name):
-    """Trains a multi-output classifier, evaluates its performance, and saves it."""
+    """
+    Trains a multi-output classifier, evaluates its performance, and saves it.
+    This version includes a train-test split for a more rigorous evaluation.
+    
+    Args:
+        model_instance: The base scikit-learn model to use.
+        historical_data (list): The list of historical draw data.
+        model_name (str): The name of the model for logging and file naming.
+    
+    Returns:
+        dict: A dictionary containing the model and its evaluation score.
+    """
     print(f"\n🤖 Training and evaluating {model_name}...")
     
     if isinstance(historical_data, list):
@@ -322,30 +348,41 @@ def train_and_evaluate_model(model_instance, historical_data, model_name):
 
     df = df.dropna()
     
+    # Create features (X) and target (y)
     X = create_features(df)
     white_balls_list = df[['Number 1', 'Number 2', 'Number 3', 'Number 4', 'Number 5']].values.tolist()
     
     mlb = MultiLabelBinarizer(classes=range(1, 70))
     y_white_balls = mlb.fit_transform(white_balls_list)
     
+    # Align the number of samples
     min_samples = min(X.shape[0], y_white_balls.shape[0])
     X = X[:min_samples]
     y_white_balls = y_white_balls[:min_samples]
-
-    print(f"✅ Data prepared for {model_name}: X shape {X.shape}, y shape {y_white_balls.shape}")
     
+    # --- The key change: Splitting the data ---
+    X_train, X_test, y_train, y_test = train_test_split(
+        X, y_white_balls, test_size=0.2, random_state=42
+    )
+    
+    print(f"✅ Data split: Training on {X_train.shape[0]} samples, testing on {X_test.shape[0]} samples.")
+    
+    # Initialize and fit the multi-output classifier on the TRAINING data
     model = MultiOutputClassifier(model_instance, n_jobs=-1)
-    model.fit(X, y_white_balls)
+    model.fit(X_train, y_train)
     
-    y_pred = model.predict(X)
-    score = jaccard_score(y_white_balls, y_pred, average='samples')
+    # Make predictions and evaluate on the TESTING data
+    y_pred = model.predict(X_test)
+    score = jaccard_score(y_test, y_pred, average='samples')
     
+    # Save the trained model
     model_path = f"enhanced_model_{model_name.lower().replace(' ', '_')}.joblib"
     joblib.dump(model, model_path)
     
-    print(f"✅ {model_name} trained and saved with Jaccard Score: {score:.4f}")
+    print(f"✅ {model_name} trained and saved with Jaccard Score on Test Data: {score:.4f}")
     
     return {"model": model, "score": score}
+
 
 def compare_models(historical_data):
     """Orchestrates the training and comparison of multiple models."""
