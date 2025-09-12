@@ -17,9 +17,9 @@ from sklearn.neural_network import MLPClassifier
 from sklearn.linear_model import LogisticRegression, RidgeClassifier
 from sklearn.model_selection import train_test_split
 from sklearn.ensemble import GradientBoostingClassifier, RandomForestClassifier
-from sklearn.linear_model import LogisticRegression
 from sklearn.preprocessing import MultiLabelBinarizer
 from sklearn.metrics import jaccard_score
+from xgboost import XGBClassifier
 
 # Load environment variables
 load_dotenv()
@@ -388,14 +388,15 @@ def train_and_evaluate_model(model_instance, historical_data, model_name):
 
 def compare_models(historical_data):
     """
-    Orchestrates the training and comparison of multiple models, including Ridge and MLP.
+    Orchestrates the training and comparison of multiple models, including XGBoost.
     """
     models_to_test = {
         "Gradient Boosting": GradientBoostingClassifier(n_estimators=100, learning_rate=0.1, max_depth=3, random_state=42),
         "Random Forest": RandomForestClassifier(n_estimators=100, random_state=42),
         "Logistic Regression": LogisticRegression(solver='liblinear', random_state=42),
         "Ridge Classifier": RidgeClassifier(random_state=42),
-        "MLP Classifier": MLPClassifier(hidden_layer_sizes=(100,), max_iter=200, random_state=42)
+        "MLP Classifier": MLPClassifier(hidden_layer_sizes=(100,), max_iter=200, random_state=42),
+        "XGBoost": XGBClassifier(use_label_encoder=False, eval_metric='logloss', random_state=42)
     }
     
     results = {}
@@ -429,7 +430,6 @@ def compare_models(historical_data):
             print(f"❌ Error loading best model: {e}")
     return None
 
-# Updated predict_enhanced_numbers function
 def predict_enhanced_numbers(historical_data, model):
     """Generate numbers using enhanced prediction"""
     if model is None:
@@ -444,14 +444,13 @@ def predict_enhanced_numbers(historical_data, model):
         features = create_features(recent_df)
         
         # Predict probabilities for each of the 69 numbers
-        try:
+        if hasattr(model, 'predict_proba'):
             # model.predict_proba returns a list of 69 arrays, one for each number
             probabilities_list = model.predict_proba(features)
             
             # Extract the probability of each number being drawn (class 1)
             high_freq_probs = [prob[0, 1] for prob in probabilities_list]
-            
-        except:
+        else:
             # Fallback to direct prediction if probabilities are not available
             predictions = model.predict(features)[0]
             high_freq_probs = predictions.astype(float)
