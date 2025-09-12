@@ -18,7 +18,7 @@ from sklearn.neural_network import MLPClassifier
 from sklearn.linear_model import LogisticRegression, RidgeClassifier
 from sklearn.preprocessing import MultiLabelBinarizer
 from sklearn.metrics import jaccard_score
-from xgboost import XGBClassifie
+from xgboost import XGBClassifier
 import traceback
 
 # Load environment variables
