@@ -303,62 +303,52 @@ def generate_smart_numbers(historical_data):
     
 # --- Model Training and Prediction ---
 
-def create_features(historical_data):
+def create_prediction_features():
     """
-    Creates a feature matrix (X) for model prediction from raw historical data.
-    Ensures the feature matrix always contains all 69 possible numbers.
+    Creates a single feature matrix (X) for prediction.
+    This is a row vector of zeros and ones to represent the numbers.
     """
-    df = pd.DataFrame(historical_data)
-    white_balls_list = df[['Number 1', 'Number 2', 'Number 3', 'Number 4', 'Number 5']].values.tolist()
-    
-    # Create a list of dictionaries for one-hot encoding
-    features = []
-    for draw in white_balls_list:
-        feature_dict = {f'num_{i}': 1 for i in draw}
-        features.append(feature_dict)
-    
-    # Convert to DataFrame and handle all possible numbers
-    X = pd.DataFrame(features).fillna(0).astype(int)
-    all_possible_features = [f'num_{i}' for i in range(1, 70)]
-    X_reindexed = pd.DataFrame(0, index=X.index, columns=all_possible_features)
-    X_reindexed.update(X)
-    return X_reindexed
+    feature_dict = {f'num_{i}': 0 for i in range(1, 70)}
+    X = pd.DataFrame([feature_dict])
+    return X
 
-def predict_with_model(historical_data, model):
+def predict_with_model(model):
     """Get predictions for white balls and powerball from a single model."""
     if model is None:
+        # Fallback to random generation if no model is loaded
+        historical_data = fetch_historical_draws(limit=2000)
         return generate_smart_numbers(historical_data)
         
     try:
-        recent_draws = historical_data[-5:] if len(historical_data) >= 5 else historical_data
+        # Create a single feature row for prediction
+        features = create_prediction_features()
         
-        # Use the corrected create_features function
-        features = create_features(recent_draws)
+        # Get probabilities from the model
+        probabilities_list = model.predict_proba(features)
         
-        if hasattr(model, 'predict_proba'):
-            probabilities_list = model.predict_proba(features)
-            high_freq_probs = [prob[0, 1] for prob in probabilities_list]
+        # Reshape probabilities to a single array
+        high_freq_probs = np.array([prob[0, 1] for prob in probabilities_list])
+        
+        # Normalize probabilities to sum to 1
+        total_prob = high_freq_probs.sum()
+        if total_prob == 0:
+            # Fallback to uniform distribution if all probabilities are zero
+            normalized_probs = np.full(69, 1/69)
         else:
-            predictions = model.predict(features)[0]
-            high_freq_probs = predictions.astype(float)
+            normalized_probs = high_freq_probs / total_prob
         
-        number_probs = [(i+1, high_freq_probs[i]) for i in range(len(high_freq_probs))]
-        number_probs.sort(key=lambda x: x[1], reverse=True)
+        # Select 5 numbers based on the probability distribution
+        numbers = list(range(1, 70))
+        selected_numbers = np.random.choice(numbers, size=5, p=normalized_probs, replace=False)
         
-        selected_numbers = []
-        for num, prob in number_probs:
-            if len(selected_numbers) >= 5:
-                break
-            if num not in selected_numbers:
-                selected_numbers.append(num)
-        
+        # Predict the Powerball randomly (no model for this)
         powerball = np.random.randint(1, 27)
         
         return sorted(selected_numbers), powerball
         
     except Exception as e:
         print(f"❌ Prediction failed for a model: {e}, using fallback")
-        return generate_smart_numbers(historical_data)
+        return generate_smart_numbers(fetch_historical_draws(limit=2000))
 
 # Keep a log of which predictions were closer to actual draws
 performance_log = {
@@ -367,23 +357,37 @@ performance_log = {
     'ties': 0
 }
 
-def ensemble_prediction(historical_data, rf_model, gb_model):
+def ensemble_prediction(rf_model, gb_model):
     """Get predictions from both models and combine them using a simple voting ensemble."""
     print("🧠 Using ensemble model for prediction...")
     
-    rf_pred_white_balls, rf_pred_powerball = predict_with_model(historical_data, rf_model)
-    gb_pred_white_balls, gb_pred_powerball = predict_with_model(historical_data, gb_model)
+    # Get probabilities from Random Forest
+    rf_probabilities_list = rf_model.predict_proba(create_prediction_features())
+    rf_probs = np.array([prob[0, 1] for prob in rf_probabilities_list])
     
-    # Combine white ball predictions
-    combined_numbers_counter = Counter(rf_pred_white_balls + gb_pred_white_balls)
-    sorted_combined_numbers = [num for num, count in combined_numbers_counter.most_common()]
+    # Get probabilities from Gradient Boosting
+    gb_probabilities_list = gb_model.predict_proba(create_prediction_features())
+    gb_probs = np.array([prob[0, 1] for prob in gb_probabilities_list])
     
-    final_white_balls = sorted(sorted_combined_numbers[:5])
+    # Average the probabilities from both models
+    combined_probs = (rf_probs + gb_probs) / 2
     
-    # Combine powerball predictions using a simple average (if applicable)
-    final_powerball = int(np.round((rf_pred_powerball + gb_pred_powerball) / 2))
+    # Normalize probabilities to sum to 1
+    total_prob = combined_probs.sum()
+    if total_prob == 0:
+        normalized_probs = np.full(69, 1/69)
+    else:
+        normalized_probs = combined_probs / total_prob
+        
+    # Select 5 numbers based on the combined probability distribution
+    numbers = list(range(1, 70))
+    final_white_balls = np.random.choice(numbers, size=5, p=normalized_probs, replace=False)
     
-    return final_white_balls, final_powerball
+    # Predict the Powerball randomly
+    final_powerball = np.random.randint(1, 27)
+    
+    return sorted(final_white_balls), final_powerball
+
 
 # --- Main Application Logic ---
 
@@ -396,6 +400,29 @@ try:
     if historical_data_for_training:
         print(f"✅ Fetched {len(historical_data_for_training)} records for model loading.")
         
+        # Create features and target for training
+        df = pd.DataFrame(historical_data_for_training)
+        white_balls_list = df[['Number 1', 'Number 2', 'Number 3', 'Number 4', 'Number 5']].values.tolist()
+        mlb = MultiLabelBinarizer(classes=range(1, 70))
+        y_white_balls = mlb.fit_transform(white_balls_list)
+        
+        # Create a DataFrame for features
+        features = []
+        for draw in historical_data_for_training:
+            feature_dict = {f'num_{i}': 1 for i in [draw['Number 1'], draw['Number 2'], draw['Number 3'], draw['Number 4'], draw['Number 5']]}
+            features.append(feature_dict)
+        X = pd.DataFrame(features).fillna(0).astype(int)
+        
+        min_samples = min(len(X), len(y_white_balls))
+        X = X.iloc[:min_samples]
+        y_white_balls = y_white_balls[:min_samples]
+
+        # Ensure consistent columns
+        all_possible_features = [f'num_{i}' for i in range(1, 70)]
+        X_reindexed = pd.DataFrame(0, index=X.index, columns=all_possible_features)
+        X_reindexed.update(X)
+        X = X_reindexed
+        
         # Load or train Random Forest
         try:
             RF_MODEL = joblib.load('enhanced_model_random_forest.joblib')
@@ -404,8 +431,6 @@ try:
             print("⚠ Random Forest model not found. Training it now...")
             rf_instance = RandomForestClassifier(n_estimators=100, random_state=42)
             RF_MODEL = MultiOutputClassifier(rf_instance, n_jobs=-1)
-            X = create_features(historical_data_for_training)
-            y_white_balls = MultiLabelBinarizer(classes=range(1, 70)).fit_transform(pd.DataFrame(historical_data_for_training)[['Number 1', 'Number 2', 'Number 3', 'Number 4', 'Number 5']].values.tolist())
             RF_MODEL.fit(X, y_white_balls)
             joblib.dump(RF_MODEL, 'enhanced_model_random_forest.joblib')
         
@@ -417,8 +442,6 @@ try:
             print("⚠ Gradient Boosting model not found. Training it now...")
             gb_instance = GradientBoostingClassifier(n_estimators=100, learning_rate=0.1, max_depth=3, random_state=42)
             GB_MODEL = MultiOutputClassifier(gb_instance, n_jobs=-1)
-            X = create_features(historical_data_for_training)
-            y_white_balls = MultiLabelBinarizer(classes=range(1, 70)).fit_transform(pd.DataFrame(historical_data_for_training)[['Number 1', 'Number 2', 'Number 3', 'Number 4', 'Number 5']].values.tolist())
             GB_MODEL.fit(X, y_white_balls)
             joblib.dump(GB_MODEL, 'enhanced_model_gradient_boosting.joblib')
     else:
@@ -484,7 +507,7 @@ async def generate_numbers():
         print(f"✅ Found {len(historical_data)} historical draws")
         
         print("🤖 Generating numbers with ML model ensemble...")
-        white_balls, powerball = ensemble_prediction(historical_data, RF_MODEL, GB_MODEL)
+        white_balls, powerball = ensemble_prediction(RF_MODEL, GB_MODEL)
         print(f"✅ Generated numbers: {white_balls}, Powerball: {powerball}")
         
         print("📅 Fetching 2025 data...")
