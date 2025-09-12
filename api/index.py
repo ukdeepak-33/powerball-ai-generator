@@ -1,9 +1,4 @@
 # api/index.py
-import pandas as pd
-import numpy as np
-import traceback
-import joblib
-import os
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, HTMLResponse
@@ -11,15 +6,20 @@ from sklearn.multioutput import MultiOutputClassifier
 from collections import defaultdict, Counter
 from typing import Dict, List, Any, Set, Tuple, Optional
 from supabase import create_client, Client
+import pandas as pd
+import numpy as np
+import os
 from dotenv import load_dotenv
+import joblib
 from pathlib import Path
-from sklearn.neural_network import MLPClassifier
-from sklearn.linear_model import LogisticRegression, RidgeClassifier
 from sklearn.model_selection import train_test_split
 from sklearn.ensemble import GradientBoostingClassifier, RandomForestClassifier
+from sklearn.neural_network import MLPClassifier
+from sklearn.linear_model import LogisticRegression, RidgeClassifier
 from sklearn.preprocessing import MultiLabelBinarizer
 from sklearn.metrics import jaccard_score
-from xgboost import XGBClassifier
+from xgboost import XGBClassifie
+import traceback
 
 # Load environment variables
 load_dotenv()
