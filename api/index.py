@@ -14,6 +14,7 @@ from supabase import create_client, Client
 from dotenv import load_dotenv
 from pathlib import Path
 from sklearn.ensemble import GradientBoostingClassifier, RandomForestClassifier
+from sklearn.neighbors import KNeighborsClassifier # Added KNN import
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import MultiLabelBinarizer
 from sklearn.metrics import jaccard_score
@@ -312,53 +313,10 @@ def create_prediction_features():
     X = pd.DataFrame([feature_dict])
     return X
 
-def predict_with_model(model):
-    """Get predictions for white balls and powerball from a single model."""
-    if model is None:
-        # Fallback to random generation if no model is loaded
-        historical_data = fetch_historical_draws(limit=2000)
-        return generate_smart_numbers(historical_data)
-        
-    try:
-        # Create a single feature row for prediction
-        features = create_prediction_features()
-        
-        # Get probabilities from the model
-        probabilities_list = model.predict_proba(features)
-        
-        # Reshape probabilities to a single array
-        high_freq_probs = np.array([prob[0, 1] for prob in probabilities_list])
-        
-        # Normalize probabilities to sum to 1
-        total_prob = high_freq_probs.sum()
-        if total_prob == 0:
-            # Fallback to uniform distribution if all probabilities are zero
-            normalized_probs = np.full(69, 1/69)
-        else:
-            normalized_probs = high_freq_probs / total_prob
-        
-        # Select 5 numbers based on the probability distribution
-        numbers = list(range(1, 70))
-        selected_numbers = np.random.choice(numbers, size=5, p=normalized_probs, replace=False)
-        
-        # Predict the Powerball randomly (no model for this)
-        powerball = np.random.randint(1, 27)
-        
-        return sorted(selected_numbers), powerball
-        
-    except Exception as e:
-        print(f"❌ Prediction failed for a model: {e}, using fallback")
-        return generate_smart_numbers(fetch_historical_draws(limit=2000))
-
-# Keep a log of which predictions were closer to actual draws
-performance_log = {
-    'random_forest_wins': 0,
-    'gradient_boosting_wins': 0,
-    'ties': 0
-}
-
-def ensemble_prediction(rf_model, gb_model):
-    """Get predictions from both models and combine them using a simple voting ensemble."""
+def ensemble_prediction(rf_model, gb_model, knn_model):
+    """
+    Get predictions from all three models and combine them using a simple voting ensemble.
+    """
     print("🧠 Using ensemble model for prediction...")
     
     # Get probabilities from Random Forest
@@ -369,8 +327,12 @@ def ensemble_prediction(rf_model, gb_model):
     gb_probabilities_list = gb_model.predict_proba(create_prediction_features())
     gb_probs = np.array([prob[0, 1] for prob in gb_probabilities_list])
     
-    # Average the probabilities from both models
-    combined_probs = (rf_probs + gb_probs) / 2
+    # Get probabilities from KNN
+    knn_probabilities_list = knn_model.predict_proba(create_prediction_features())
+    knn_probs = np.array([prob[0, 1] for prob in knn_probabilities_list])
+    
+    # Average the probabilities from all three models
+    combined_probs = (rf_probs + gb_probs + knn_probs) / 3
     
     # Normalize probabilities to sum to 1
     total_prob = combined_probs.sum()
@@ -394,6 +356,7 @@ def ensemble_prediction(rf_model, gb_model):
 print("🚀 Starting application...")
 RF_MODEL = None
 GB_MODEL = None
+KNN_MODEL = None # New variable for KNN model
 
 try:
     historical_data_for_training = fetch_historical_draws(limit=2000)
@@ -444,6 +407,18 @@ try:
             GB_MODEL = MultiOutputClassifier(gb_instance, n_jobs=-1)
             GB_MODEL.fit(X, y_white_balls)
             joblib.dump(GB_MODEL, 'enhanced_model_gradient_boosting.joblib')
+
+        # Load or train KNN (New section)
+        try:
+            KNN_MODEL = joblib.load('enhanced_model_knn.joblib')
+            print("✅ Trained KNN model loaded.")
+        except FileNotFoundError:
+            print("⚠ KNN model not found. Training it now...")
+            knn_instance = KNeighborsClassifier(n_neighbors=5, weights='distance')
+            KNN_MODEL = MultiOutputClassifier(knn_instance, n_jobs=-1)
+            KNN_MODEL.fit(X, y_white_balls)
+            joblib.dump(KNN_MODEL, 'enhanced_model_knn.joblib')
+
     else:
         print("❌ No historical data found for model training.")
 
@@ -507,7 +482,7 @@ async def generate_numbers():
         print(f"✅ Found {len(historical_data)} historical draws")
         
         print("🤖 Generating numbers with ML model ensemble...")
-        white_balls, powerball = ensemble_prediction(RF_MODEL, GB_MODEL)
+        white_balls, powerball = ensemble_prediction(RF_MODEL, GB_MODEL, KNN_MODEL)
         print(f"✅ Generated numbers: {white_balls}, Powerball: {powerball}")
         
         print("📅 Fetching 2025 data...")
@@ -538,7 +513,7 @@ async def generate_numbers():
                 "total_draws_2025": freq_2025['total_2025_draws']
             },
             "pattern_analysis": pattern_analysis,
-            "performance_log": performance_log
+            "performance_log": {"placeholder": "Performance log coming soon"}
         }
         
         return JSONResponse(content={
