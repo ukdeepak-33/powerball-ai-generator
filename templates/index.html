@@ -1,4 +1,3 @@
-<!-- Create a templates/index.html file -->
 <!DOCTYPE html>
 <html>
 <head>
@@ -6,7 +5,7 @@
     <style>
         body {
             font-family: Arial, sans-serif;
-            max-width: 800px;
+            max-width: 1200px;
             margin: 0 auto;
             padding: 20px;
             background-color: #f5f5f5;
@@ -36,15 +35,31 @@
         .btn:hover {
             background: #c0392b;
         }
-        .result {
-            margin: 30px 0;
-            padding: 20px;
+        .loading {
+            display: none;
+            text-align: center;
+            color: #7f8c8d;
+        }
+        .results-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 20px;
+            margin-top: 30px;
+        }
+        .result-card {
             background: #ecf0f1;
+            padding: 20px;
             border-radius: 8px;
             text-align: center;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.05);
+        }
+        .result-card h2 {
+            margin-top: 0;
+            font-size: 22px;
+            color: #34495e;
         }
         .numbers {
-            font-size: 28px;
+            font-size: 24px;
             font-weight: bold;
             color: #2c3e50;
             margin: 10px 0;
@@ -54,56 +69,17 @@
             font-weight: bold;
         }
         .analysis {
-            margin-top: 20px;
+            margin-top: 15px;
             padding: 15px;
             background: #dfe6e9;
             border-radius: 5px;
             text-align: left;
-        }
-        .loading {
-            display: none;
-            text-align: center;
-            color: #7f8c8d;
-        }
-        .analysis-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-            gap: 15px;
-            margin-top: 20px;
-        }
-        .analysis-card {
-            background: #fff;
-            padding: 15px;
-            border-radius: 8px;
-            box-shadow: 0 1px 5px rgba(0,0,0,0.05);
-            text-align: center;
-        }
-        .analysis-card h4 {
-            margin-top: 0;
-            color: #34495e;
-        }
-        .analysis-card p {
-            font-size: 20px;
-            font-weight: bold;
-            margin: 5px 0 0;
-            color: #e74c3c;
-        }
-        .frequency-list {
-            list-style: none;
-            padding: 0;
-            margin-top: 10px;
-        }
-        .frequency-list li {
-            display: inline-block;
-            margin: 0 5px;
-            padding: 5px 10px;
-            background: #bdc3c7;
-            border-radius: 5px;
             font-size: 14px;
         }
         .pattern-list {
             list-style-type: disc;
             padding-left: 20px;
+            margin: 5px 0 0;
         }
     </style>
 </head>
@@ -118,67 +94,68 @@
             <p>🤖 AI is analyzing historical patterns...</p>
         </div>
         
-        <div id="result" class="result" style="display: none;">
-            <h2>Your AI-Generated Numbers:</h2>
-            <div id="numbers" class="numbers"></div>
-            <div id="analysis" class="analysis"></div>
-        </div>
+        <div id="results-container" class="results-grid" style="display: none;">
+            </div>
     </div>
 
     <script>
         async function generateNumbers() {
-            const resultDiv = document.getElementById('result');
+            const resultsContainer = document.getElementById('results-container');
             const loadingDiv = document.getElementById('loading');
-            const numbersDiv = document.getElementById('numbers');
-            const analysisDiv = document.getElementById('analysis');
             
             // Show loading, hide previous results
             loadingDiv.style.display = 'block';
-            resultDiv.style.display = 'none';
+            resultsContainer.style.display = 'none';
+            resultsContainer.innerHTML = ''; // Clear previous results
             
             try {
-                const response = await fetch('/generate');
+                // ASSUMPTION: The backend API now returns a single object with results for all models
+                const response = await fetch('/generate_all'); 
                 const data = await response.json();
                 
-                // Display numbers
-                numbersDiv.innerHTML = 
-                    data.generated_numbers.white_balls.join(' - ') + 
-                    ' <span class="powerball">⚡ ' + data.generated_numbers.powerball + '</span>';
-                
-                // Display analysis
-                let frequencyHtml = '<h4>2025 Frequency:</h4><ul class="frequency-list">';
-                for (const num in data.analysis['2025_frequency'].white_balls) {
-                    frequencyHtml += `<li>${num} (${data.analysis['2025_frequency'].white_balls[num]})</li>`;
-                }
-                frequencyHtml += `<li>⚡ ${data.generated_numbers.powerball} (${data.analysis['2025_frequency'].powerball})</li></ul>`;
-                
-                let patternHtml = '<h4>Pattern Analysis:</h4><ul class="pattern-list">';
-                data.analysis.pattern_analysis.split('\n').forEach(line => {
-                    if (line.trim() !== '') {
-                        patternHtml += `<li>${line.trim().substring(2)}</li>`;
-                    }
-                });
-                patternHtml += '</ul>';
+                // An array of results to loop through
+                const allResults = [
+                    { title: "Model A Result", data: data.model_a },
+                    { title: "Model B Result", data: data.model_b },
+                    { title: "Model C Result", data: data.model_c },
+                    { title: "Combined Final Result", data: data.final_result }
+                ];
 
-                analysisDiv.innerHTML = `
-                    <h3>Analysis:</h3>
-                    <p>📊 **${data.analysis.message}**</p>
-                    <div class="analysis-grid">
-                        <div class="analysis-card">
-                            <h4>Group A</h4>
-                            <p>${data.analysis.group_a_count} Numbers</p>
+                allResults.forEach(result => {
+                    const resultCard = document.createElement('div');
+                    resultCard.className = 'result-card';
+
+                    // Create HTML for each card
+                    const numbersHtml = `
+                        <h2>${result.title}</h2>
+                        <div class="numbers">
+                            ${result.data.generated_numbers.white_balls.join(' - ')}
+                            <span class="powerball">⚡ ${result.data.generated_numbers.powerball}</span>
                         </div>
-                        <div class="analysis-card">
-                            <h4>Odd/Even Ratio</h4>
-                            <p>${data.analysis.odd_even_ratio}</p>
-                        </div>
-                    </div>
-                    ${frequencyHtml}
-                    ${patternHtml}
-                `;
+                    `;
+
+                    let analysisHtml = '<h3>Analysis:</h3>';
+                    analysisHtml += `<p>📊 <strong>${result.data.analysis.message}</strong></p>`;
+                    analysisHtml += `<p>✅ <strong>${result.data.analysis.group_a_count} Group A numbers</strong></p>`;
+                    analysisHtml += `<p>🎯 <strong>${result.data.analysis.odd_even_ratio}</strong> odd/even ratio</p>`;
+                    
+                    if (result.data.analysis.pattern_analysis) {
+                        analysisHtml += '<h4>Pattern Analysis:</h4>';
+                        analysisHtml += '<ul class="pattern-list">';
+                        result.data.analysis.pattern_analysis.split('\n').forEach(line => {
+                            if (line.trim() !== '') {
+                                analysisHtml += `<li>${line.trim().substring(2)}</li>`;
+                            }
+                        });
+                        analysisHtml += '</ul>';
+                    }
+
+                    resultCard.innerHTML = numbersHtml + `<div class="analysis">${analysisHtml}</div>`;
+                    resultsContainer.appendChild(resultCard);
+                });
                 
                 // Show results, hide loading
-                resultDiv.style.display = 'block';
+                resultsContainer.style.display = 'grid';
                 loadingDiv.style.display = 'none';
                 
             } catch (error) {
