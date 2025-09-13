@@ -15,7 +15,6 @@ from dotenv import load_dotenv
 from pathlib import Path
 from sklearn.ensemble import GradientBoostingClassifier, RandomForestClassifier
 from sklearn.neighbors import KNeighborsClassifier
-from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import MultiLabelBinarizer
 from sklearn.metrics import jaccard_score
 
@@ -284,7 +283,7 @@ def generate_smart_numbers(historical_data):
     all_numbers = []
     for draw in historical_data:
         all_numbers.extend([draw['Number 1'], draw['Number 2'], draw['Number 3'], 
-                          draw['Number 4'], draw['Number 5']])
+                           draw['Number 4'], draw['Number 5']])
     
     number_counts = Counter(all_numbers)
     
@@ -313,33 +312,12 @@ def create_prediction_features():
     X = pd.DataFrame([feature_dict])
     return X
 
-# New function to get predictions from a single model
-def predict_with_model(model):
-    """Get predictions for white balls and powerball from a single model."""
-    if model is None:
-        historical_data = fetch_historical_draws(limit=2000)
-        return generate_smart_numbers(historical_data)
-        
-    try:
-        features = create_prediction_features()
-        probabilities_list = model.predict_proba(features)
-        high_freq_probs = np.array([prob[0, 1] for prob in probabilities_list])
-        
-        total_prob = high_freq_probs.sum()
-        if total_prob == 0:
-            normalized_probs = np.full(69, 1/69)
-        else:
-            normalized_probs = high_freq_probs / total_prob
-        
-        numbers = list(range(1, 70))
-        selected_numbers = np.random.choice(numbers, size=5, p=normalized_probs, replace=False)
-        powerball = np.random.randint(1, 27)
-        
-        return sorted(selected_numbers), powerball
-        
-    except Exception as e:
-        print(f"❌ Prediction failed for a model: {e}, using fallback")
-        return generate_smart_numbers(fetch_historical_draws(limit=2000))
+# Keep a log of which predictions were closer to actual draws
+performance_log = {
+    'random_forest_wins': 0,
+    'gradient_boosting_wins': 0,
+    'ties': 0
+}
 
 def ensemble_prediction(rf_model, gb_model, knn_model):
     """
@@ -378,9 +356,45 @@ def ensemble_prediction(rf_model, gb_model, knn_model):
     
     return sorted(final_white_balls), final_powerball
 
-
+def get_predictions(model):
+    """Get predictions for white balls and powerball from a single model."""
+    if model is None:
+        # Fallback to random generation if no model is loaded
+        historical_data = fetch_historical_draws(limit=2000)
+        return generate_smart_numbers(historical_data)
+        
+    try:
+        # Create a single feature row for prediction
+        features = create_prediction_features()
+        
+        # Get probabilities from the model
+        probabilities_list = model.predict_proba(features)
+        
+        # Reshape probabilities to a single array
+        high_freq_probs = np.array([prob[0, 1] for prob in probabilities_list])
+        
+        # Normalize probabilities to sum to 1
+        total_prob = high_freq_probs.sum()
+        if total_prob == 0:
+            # Fallback to uniform distribution if all probabilities are zero
+            normalized_probs = np.full(69, 1/69)
+        else:
+            normalized_probs = high_freq_probs / total_prob
+        
+        # Select 5 numbers based on the probability distribution
+        numbers = list(range(1, 70))
+        selected_numbers = np.random.choice(numbers, size=5, p=normalized_probs, replace=False)
+        
+        # Predict the Powerball randomly (no model for this)
+        powerball = np.random.randint(1, 27)
+        
+        return sorted(selected_numbers), powerball
+        
+    except Exception as e:
+        print(f"❌ Prediction failed for a model: {e}, using fallback")
+        return generate_smart_numbers(fetch_historical_draws(limit=2000))
+        
 # --- Main Application Logic ---
-
 print("🚀 Starting application...")
 RF_MODEL = None
 GB_MODEL = None
@@ -391,11 +405,13 @@ try:
     if historical_data_for_training:
         print(f"✅ Fetched {len(historical_data_for_training)} records for model loading.")
         
+        # Create features and target for training
         df = pd.DataFrame(historical_data_for_training)
         white_balls_list = df[['Number 1', 'Number 2', 'Number 3', 'Number 4', 'Number 5']].values.tolist()
         mlb = MultiLabelBinarizer(classes=range(1, 70))
         y_white_balls = mlb.fit_transform(white_balls_list)
         
+        # Create a DataFrame for features
         features = []
         for draw in historical_data_for_training:
             feature_dict = {f'num_{i}': 1 for i in [draw['Number 1'], draw['Number 2'], draw['Number 3'], draw['Number 4'], draw['Number 5']]}
@@ -406,11 +422,13 @@ try:
         X = X.iloc[:min_samples]
         y_white_balls = y_white_balls[:min_samples]
 
+        # Ensure consistent columns
         all_possible_features = [f'num_{i}' for i in range(1, 70)]
         X_reindexed = pd.DataFrame(0, index=X.index, columns=all_possible_features)
         X_reindexed.update(X)
         X = X_reindexed
         
+        # Load or train Random Forest
         try:
             RF_MODEL = joblib.load('enhanced_model_random_forest.joblib')
             print("✅ Trained Random Forest model loaded.")
@@ -421,6 +439,7 @@ try:
             RF_MODEL.fit(X, y_white_balls)
             joblib.dump(RF_MODEL, 'enhanced_model_random_forest.joblib')
         
+        # Load or train Gradient Boosting
         try:
             GB_MODEL = joblib.load('enhanced_model_gradient_boosting.joblib')
             print("✅ Trained Gradient Boosting model loaded.")
@@ -430,7 +449,8 @@ try:
             GB_MODEL = MultiOutputClassifier(gb_instance, n_jobs=-1)
             GB_MODEL.fit(X, y_white_balls)
             joblib.dump(GB_MODEL, 'enhanced_model_gradient_boosting.joblib')
-
+            
+        # Load or train KNN
         try:
             KNN_MODEL = joblib.load('enhanced_model_knn.joblib')
             print("✅ Trained KNN model loaded.")
@@ -440,22 +460,24 @@ try:
             KNN_MODEL = MultiOutputClassifier(knn_instance, n_jobs=-1)
             KNN_MODEL.fit(X, y_white_balls)
             joblib.dump(KNN_MODEL, 'enhanced_model_knn.joblib')
-
+            
     else:
         print("❌ No historical data found for model training.")
 
 except Exception as e:
     print(f"❌ Initial model loading or training failed: {e}")
     print(f"🔍 Traceback: {traceback.format_exc()}")
-
+    
 @app.get("/", response_class=HTMLResponse)
 async def read_root():
+    """Serve the HTML homepage"""
     index_path = Path("templates/index.html")
     if index_path.exists():
         with open(index_path, 'r') as f:
             html_content = f.read()
         return HTMLResponse(content=html_content)
     else:
+        # NOTE: This HTML is provided by the user in the prompt, with minor formatting adjustments for clarity
         return HTMLResponse("""
         <!DOCTYPE html>
         <html>
@@ -516,7 +538,7 @@ async def read_root():
                     }
 
                     function fetchNumbers(url, modelName) {
-                        modelNameDisplay.textContent = `Generated by ${modelName}`;
+                        modelNameDisplay.textContent = \`Generated by ${modelName}\`;
                         fetch(url)
                             .then(response => {
                                 if (!response.ok) {
@@ -544,3 +566,183 @@ async def read_root():
         </body>
         </html>
         """)
+
+@app.get("/generate")
+async def generate_ensemble():
+    """Generate numbers using the ensemble model"""
+    try:
+        print("📊 Fetching historical data...")
+        historical_data = fetch_historical_draws(limit=2000)
+        if not historical_data:
+            print("❌ No historical data found")
+            raise HTTPException(status_code=404, detail="No historical data found")
+        
+        print(f"✅ Found {len(historical_data)} historical draws")
+        
+        print("🤖 Generating numbers with ML model ensemble...")
+        white_balls, powerball = ensemble_prediction(RF_MODEL, GB_MODEL, KNN_MODEL)
+        print(f"✅ Generated numbers: {white_balls}, Powerball: {powerball}")
+        
+        print("📅 Fetching 2025 data...")
+        data_2025 = fetch_2025_draws()
+        print(f"✅ Found {len(data_2025)} draws in 2025")
+        
+        group_a_count = sum(1 for num in white_balls if num in GROUP_A_NUMBERS)
+        odd_count = sum(1 for num in white_balls if num % 2 == 1)
+
+        freq_2025 = get_2025_frequencies(white_balls, powerball, data_2025)
+
+        print("🔍 Detecting patterns...")
+        patterns = detect_number_patterns(white_balls)
+        print(f"✅ Patterns detected: {patterns}")
+        
+        pattern_history = analyze_pattern_history(patterns, historical_data)
+        pattern_analysis = format_pattern_analysis(pattern_history)
+        print(f"📊 Pattern analysis complete")
+        
+        json_compatible_analysis = {
+            "group_a_count": int(group_a_count),
+            "odd_even_ratio": f"{int(odd_count)} odd, {5 - int(odd_count)} even",
+            "total_numbers_generated": len(white_balls),
+            "message": "AI-generated numbers based on historical patterns",
+            "2025_frequency": {
+                "white_balls": freq_2025['white_ball_counts'],
+                "powerball": freq_2025['powerball_count'],
+                "total_draws_2025": freq_2025['total_2025_draws']
+            },
+            "pattern_analysis": pattern_analysis,
+            "performance_log": "N/A" #ensemble doesn't have a specific performance log
+        }
+        
+        return JSONResponse(content={
+            "generated_numbers": {
+                "white_balls": [int(x) for x in white_balls],
+                "powerball": int(powerball),
+            },
+            "analysis": json_compatible_analysis
+        })
+        
+    except Exception as e:
+        print(f"❌ Error in generate_ensemble: {e}")
+        return JSONResponse(content={"error": str(e), "traceback": traceback.format_exc()}, status_code=500)
+
+@app.get("/generate/{model_alias}")
+async def generate_by_model(model_alias: str):
+    """Generate numbers using a specific model (RF, GB, KNN)"""
+    models = {
+        "rf": RF_MODEL,
+        "gb": GB_MODEL,
+        "knn": KNN_MODEL
+    }
+    
+    if model_alias not in models:
+        raise HTTPException(status_code=404, detail="Model alias not found")
+        
+    try:
+        print(f"📊 Fetching historical data for {model_alias}...")
+        historical_data = fetch_historical_draws(limit=2000)
+        if not historical_data:
+            print("❌ No historical data found")
+            raise HTTPException(status_code=404, detail="No historical data found")
+            
+        print(f"✅ Found {len(historical_data)} historical draws")
+        
+        print(f"🤖 Generating numbers with {model_alias} model...")
+        white_balls, powerball = get_predictions(models[model_alias])
+        print(f"✅ Generated numbers: {white_balls}, Powerball: {powerball}")
+        
+        print("📅 Fetching 2025 data...")
+        data_2025 = fetch_2025_draws()
+        print(f"✅ Found {len(data_2025)} draws in 2025")
+        
+        group_a_count = sum(1 for num in white_balls if num in GROUP_A_NUMBERS)
+        odd_count = sum(1 for num in white_balls if num % 2 == 1)
+
+        freq_2025 = get_2025_frequencies(white_balls, powerball, data_2025)
+
+        print("🔍 Detecting patterns...")
+        patterns = detect_number_patterns(white_balls)
+        print(f"✅ Patterns detected: {patterns}")
+        
+        pattern_history = analyze_pattern_history(patterns, historical_data)
+        pattern_analysis = format_pattern_analysis(pattern_history)
+        print(f"📊 Pattern analysis complete")
+        
+        json_compatible_analysis = {
+            "group_a_count": int(group_a_count),
+            "odd_even_ratio": f"{int(odd_count)} odd, {5 - int(odd_count)} even",
+            "total_numbers_generated": len(white_balls),
+            "message": f"AI-generated numbers by {model_alias} model",
+            "2025_frequency": {
+                "white_balls": freq_2025['white_ball_counts'],
+                "powerball": freq_2025['powerball_count'],
+                "total_draws_2025": freq_2025['total_2025_draws']
+            },
+            "pattern_analysis": pattern_analysis
+        }
+        
+        return JSONResponse(content={
+            "generated_numbers": {
+                "white_balls": [int(x) for x in white_balls],
+                "powerball": int(powerball),
+            },
+            "analysis": json_compatible_analysis
+        })
+        
+    except Exception as e:
+        print(f"❌ Error in generate_by_model for {model_alias}: {e}")
+        return JSONResponse(content={"error": str(e), "traceback": traceback.format_exc()}, status_code=500)
+        
+@app.get("/analyze")
+async def analyze_trends():
+    """Analyze historical trends"""
+    try:
+        historical_data = fetch_historical_draws()
+        if not historical_data:
+            raise HTTPException(status_code=404, detail="No historical data available for analysis")
+        
+        df = pd.DataFrame(historical_data)
+        
+        white_ball_columns = ['Number 1', 'Number 2', 'Number 3', 'Number 4', 'Number 5']
+        
+        def has_consecutive(row):
+            sorted_nums = sorted([row[col] for col in white_ball_columns])
+            for i in range(len(sorted_nums)-1):
+                if sorted_nums[i+1] - sorted_nums[i] == 1:
+                    return 1
+            return 0
+        
+        df['group_a_count'] = df[white_ball_columns].apply(
+            lambda x: sum(1 for num in x if num in GROUP_A_NUMBERS), axis=1)
+        df['odd_count'] = df[white_ball_columns].apply(
+            lambda x: sum(1 for num in x if num % 2 == 1), axis=1)
+        df['has_consecutive'] = df.apply(has_consecutive, axis=1)
+        
+        avg_group_a = df['group_a_count'].mean()
+        consecutive_frequency = df['has_consecutive'].mean()
+        avg_odd_count = df['odd_count'].mean()
+        
+        return JSONResponse({
+            "historical_analysis": {
+                "total_draws_analyzed": len(df),
+                "average_group_a_numbers": round(avg_group_a, 2),
+                "consecutive_number_frequency": f"{consecutive_frequency * 100:.1f}%",
+                "average_odd_numbers": round(avg_odd_count, 2),
+                "data_timeframe": {
+                    "oldest_draw": df['Draw Date'].min() if 'Draw Date' in df.columns else "Unknown",
+                    "newest_draw": df['Draw Date'].max() if 'Draw Date' in df.columns else "Unknown"
+                }
+            }
+        })
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Analysis error: {str(e)}")
+
+@app.get("/health")
+async def health_check():
+    return {"status": "healthy", "message": "Service is running normally"}
+
+if __name__ == "__main__":
+    import uvicorn
+    port = int(os.environ.get("PORT", 8000))
+    uvicorn.run(app, host="0.0.0.0", port=port)
