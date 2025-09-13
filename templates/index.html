@@ -1,165 +1,96 @@
-<!-- Create a templates/index.html file -->
 <!DOCTYPE html>
 <html>
 <head>
     <title>Powerball AI Generator</title>
     <style>
-        body {
-            font-family: Arial, sans-serif;
-            max-width: 800px;
-            margin: 0 auto;
-            padding: 20px;
-            background-color: #f5f5f5;
-        }
-        .container {
-            background: white;
-            padding: 30px;
-            border-radius: 10px;
-            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
-        }
-        h1 {
-            color: #2c3e50;
-            text-align: center;
-        }
-        .btn {
-            background: #e74c3c;
-            color: white;
-            padding: 15px 30px;
-            border: none;
-            border-radius: 5px;
-            font-size: 18px;
-            cursor: pointer;
-            display: block;
-            margin: 20px auto;
-            transition: background 0.3s;
-        }
-        .btn:hover {
-            background: #c0392b;
-        }
-        .result {
-            margin: 30px 0;
-            padding: 20px;
-            background: #ecf0f1;
-            border-radius: 8px;
-            text-align: center;
-        }
-        .numbers {
-            font-size: 28px;
-            font-weight: bold;
-            color: #2c3e50;
-            margin: 10px 0;
-        }
-        .powerball {
-            color: #e74c3c;
-            font-weight: bold;
-        }
-        .analysis {
-            margin-top: 20px;
+        body { font-family: Arial, sans-serif; max-width: 800px; margin: 0 auto; padding: 20px; text-align: center; }
+        h1 { color: #2c3e50; }
+        .btn-container { display: flex; justify-content: center; gap: 10px; margin-top: 20px; }
+        .btn { padding: 10px 20px; border: none; border-radius: 5px; font-size: 16px; cursor: pointer; color: white; }
+        #ensemble-btn { background-color: #2c3e50; }
+        #rf-btn { background-color: #e74c3c; }
+        #gb-btn { background-color: #3498db; }
+        #knn-btn { background-color: #27ae60; }
+        .result-container { margin-top: 30px; }
+        #numbers-display { font-size: 24px; font-weight: bold; }
+        #analysis-display {
+            background-color: #f4f4f4;
+            border: 1px solid #ddd;
             padding: 15px;
-            background: #dfe6e9;
-            border-radius: 5px;
+            margin-top: 15px;
             text-align: left;
-        }
-        .loading {
-            display: none;
-            text-align: center;
-            color: #7f8c8d;
-        }
-        .loading-spinner {
-    border: 4px solid #f3f3f3;
-    border-top: 4px solid #e74c3c;
-    border-radius: 50%;
-    width: 40px;
-    height: 40px;
-    animation: spin 1s linear infinite;
-    margin: 0 auto;
-        }
-
-@keyframes spin {
-    0% { transform: rotate(0deg); }
-    100% { transform: rotate(360deg); }
+            white-space: pre-wrap;
+            word-wrap: break-word;
         }
     </style>
 </head>
 <body>
-    <div class="container">
-        <h1>🎰 Powerball AI Generator</h1>
-        <p style="text-align: center;">Generate intelligent Powerball numbers using machine learning and historical data analysis</p>
-        
-        <button class="btn" onclick="generateNumbers()">Generate AI-Powered Numbers</button>
-        
-        <div id="loading" class="loading">
-            <div class="loading-spinner"></div>
-            <p>🤖 AI is analyzing historical patterns...</p>
-        </div>
-        
-        <div id="result" class="result" style="display: none;">
-            <h2>Your AI-Generated Numbers:</h2>
-            <div id="numbers" class="numbers"></div>
-            <div id="analysis" class="analysis"></div>
-        </div>
+    <h1>Powerball AI Generator</h1>
+    <div class="btn-container">
+        <button id="ensemble-btn" class="btn">Generate (Ensemble)</button>
+        <button id="rf-btn" class="btn">Generate (RF)</button>
+        <button id="gb-btn" class="btn">Generate (GB)</button>
+        <button id="knn-btn" class="btn">Generate (KNN)</button>
     </div>
-
+    <div class="result-container">
+        <h2 id="model-name"></h2>
+        <div id="numbers-display"></div>
+        <div id="analysis-display"></div>
+    </div>
     <script>
-     async function generateNumbers() {
-    const resultDiv = document.getElementById('result');
-    const loadingDiv = document.getElementById('loading');
-    const numbersDiv = document.getElementById('numbers');
-    const analysisDiv = document.getElementById('analysis');
-    
-    // Show loading, hide previous results
-    loadingDiv.style.display = 'block';
-    resultDiv.style.display = 'none';
-    
-    try {
-        const response = await fetch('/generate');
-        
-        // Check if the response is successful
-        if (!response.ok) {
-            throw new Error(`Server returned ${response.status}: ${response.statusText}`);
-        }
-        
-        const data = await response.json();
-        
-        // Check if the expected data structure exists
-        if (!data || !data.generated_numbers || !data.generated_numbers.white_balls) {
-            throw new Error('Invalid response format from server');
-        }
-        
-        // Display numbers
-        numbersDiv.innerHTML = 
-            data.generated_numbers.white_balls.join(' - ') + 
-            ' <span class="powerball">⚡ ' + data.generated_numbers.powerball + '</span>';
-        
-        // Display analysis
-        analysisDiv.innerHTML = `
-            <h3>Analysis:</h3>
-            <p>✅ <strong>${data.analysis.group_a_count} Group A numbers</strong> (high-frequency numbers)</p>
-            <p>🎯 <strong>${data.analysis.odd_even_ratio}</strong> odd/even ratio</p>
-            <p>📅 <strong>2025 Frequency:</strong> ${data.generated_numbers.white_balls.map((num, index) => num + ' (' + data.analysis['2025_frequency'].white_balls[num] + ')').join(' - ')} ⚡ ${data.generated_numbers.powerball} (${data.analysis['2025_frequency'].powerball})</p>
-            <h3>🔍 Pattern Analysis:</h3>
-            <p style="white-space: pre-line; font-size: 14px; line-height: 1.4;">${data.analysis.pattern_analysis}</p>
-            <p>📊 ${data.analysis.message}</p>
-        `;
-        
-        // Show results, hide loading
-        resultDiv.style.display = 'block';
-        loadingDiv.style.display = 'none';
-        
-    } catch (error) {
-        loadingDiv.style.display = 'none';
-        
-        // Show a user-friendly error message
-        numbersDiv.innerHTML = '❌ Error generating numbers';
-        analysisDiv.innerHTML = `
-            <p style="color: #e74c3c;">Unable to generate numbers at this time. Please try again later.</p>
-            <p><small>Technical details: ${error.message}</small></p>
-        `;
-        
-        resultDiv.style.display = 'block';
-        console.error('Error:', error);
-    }
-}
+        document.addEventListener('DOMContentLoaded', () => {
+            const buttons = {
+                'ensemble-btn': '/generate',
+                'rf-btn': '/generate/rf',
+                'gb-btn': '/generate/gb',
+                'knn-btn': '/generate/knn'
+            };
+
+            const numbersDisplay = document.getElementById('numbers-display');
+            const analysisDisplay = document.getElementById('analysis-display');
+            const modelNameDisplay = document.getElementById('model-name');
+
+            function displayNumbers(data) {
+                const { generated_numbers, analysis } = data;
+                
+                numbersDisplay.innerHTML = `
+                    <h3>White Balls:</h3>
+                    <p style="font-size: 24px; font-weight: bold;">${generated_numbers.white_balls.join(', ')}</p>
+                    <h3>Powerball:</h3>
+                    <p style="font-size: 24px; font-weight: bold;">${generated_numbers.powerball}</p>
+                `;
+
+                analysisDisplay.innerHTML = `
+                    <h4>Analysis:</h4>
+                    <pre>${JSON.stringify(analysis, null, 2)}</pre>
+                `;
+            }
+
+            function fetchNumbers(url, modelName) {
+                modelNameDisplay.textContent = `Generated by ${modelName}`;
+                fetch(url)
+                    .then(response => {
+                        if (!response.ok) {
+                            throw new Error('Network response was not ok');
+                        }
+                        return response.json();
+                    })
+                    .then(data => displayNumbers(data))
+                    .catch(error => {
+                        console.error('Error fetching numbers:', error);
+                        numbersDisplay.textContent = 'Failed to generate numbers.';
+                        analysisDisplay.textContent = '';
+                    });
+            }
+
+            for (const buttonId in buttons) {
+                document.getElementById(buttonId).addEventListener('click', () => {
+                    const url = buttons[buttonId];
+                    const modelName = document.getElementById(buttonId).textContent.replace('Generate (', '').replace(')', '');
+                    fetchNumbers(url, modelName);
+                });
+            }
+        });
     </script>
 </body>
 </html>
