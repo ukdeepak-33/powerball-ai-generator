@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 # Environment variables
 .env
 .env.local
@@ -26,3 +27,6 @@ Thumbs.db
 # ML models
 *.joblib
 *.pkl
+=======
+.vercel
+>>>>>>> 47629b3 (Add pre-trained models using Git LFS)
