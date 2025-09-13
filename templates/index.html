@@ -65,6 +65,46 @@
             text-align: center;
             color: #7f8c8d;
         }
+        .analysis-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin-top: 20px;
+        }
+        .analysis-card {
+            background: #fff;
+            padding: 15px;
+            border-radius: 8px;
+            box-shadow: 0 1px 5px rgba(0,0,0,0.05);
+            text-align: center;
+        }
+        .analysis-card h4 {
+            margin-top: 0;
+            color: #34495e;
+        }
+        .analysis-card p {
+            font-size: 20px;
+            font-weight: bold;
+            margin: 5px 0 0;
+            color: #e74c3c;
+        }
+        .frequency-list {
+            list-style: none;
+            padding: 0;
+            margin-top: 10px;
+        }
+        .frequency-list li {
+            display: inline-block;
+            margin: 0 5px;
+            padding: 5px 10px;
+            background: #bdc3c7;
+            border-radius: 5px;
+            font-size: 14px;
+        }
+        .pattern-list {
+            list-style-type: disc;
+            padding-left: 20px;
+        }
     </style>
 </head>
 <body>
@@ -106,12 +146,35 @@
                     ' <span class="powerball">⚡ ' + data.generated_numbers.powerball + '</span>';
                 
                 // Display analysis
+                let frequencyHtml = '<h4>2025 Frequency:</h4><ul class="frequency-list">';
+                for (const num in data.analysis['2025_frequency'].white_balls) {
+                    frequencyHtml += `<li>${num} (${data.analysis['2025_frequency'].white_balls[num]})</li>`;
+                }
+                frequencyHtml += `<li>⚡ ${data.generated_numbers.powerball} (${data.analysis['2025_frequency'].powerball})</li></ul>`;
+                
+                let patternHtml = '<h4>Pattern Analysis:</h4><ul class="pattern-list">';
+                data.analysis.pattern_analysis.split('\n').forEach(line => {
+                    if (line.trim() !== '') {
+                        patternHtml += `<li>${line.trim().substring(2)}</li>`;
+                    }
+                });
+                patternHtml += '</ul>';
+
                 analysisDiv.innerHTML = `
                     <h3>Analysis:</h3>
-                    <p>✅ <strong>${data.analysis.group_a_count} Group A numbers</strong> (high-frequency numbers)</p>
-                    <p>🎯 <strong>${data.analysis.odd_even_ratio}</strong> odd/even ratio</p>
-                    <p>📅 <strong>2025 Frequency:</strong> ${data.generated_numbers.white_balls.map((num, index) => num + ' (' + data.analysis['2025_frequency'].white_balls[num] + ')').join(' - ')} ⚡ ${data.generated_numbers.powerball} (${data.analysis['2025_frequency'].powerball})</p>
-                    <p>📊 ${data.analysis.message}</p>
+                    <p>📊 **${data.analysis.message}**</p>
+                    <div class="analysis-grid">
+                        <div class="analysis-card">
+                            <h4>High-Frequency Group</h4>
+                            <p>${data.analysis.group_a_count} Numbers</p>
+                        </div>
+                        <div class="analysis-card">
+                            <h4>Odd/Even Ratio</h4>
+                            <p>${data.analysis.odd_even_ratio}</p>
+                        </div>
+                    </div>
+                    ${frequencyHtml}
+                    ${patternHtml}
                 `;
                 
                 // Show results, hide loading
