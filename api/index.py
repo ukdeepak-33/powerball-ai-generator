@@ -529,4 +529,4 @@ def generate_numbers(request: Request):
         })
     except Exception as e:
         traceback.print_exc()
-        return JSONResponse(status_code=500, content={"message": f"An unexpected error occurred: {str(e)}"})        
+        return JSONResponse(status_code=500, content={"message": f"An unexpected error occurred: {str(e)}"})
