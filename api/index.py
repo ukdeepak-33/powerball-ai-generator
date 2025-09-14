@@ -42,7 +42,7 @@ SUPABASE_ANON_KEY = os.environ.get("SUPABASE_ANON_KEY", "eyJhbGciOiJIUzI1NiIsInR
 SUPABASE_TABLE_NAME = 'powerball_draws'
 
 if not SUPABASE_URL or not SUPABASE_ANON_KEY:
-    raise ValueError("SUPABASE_URL and SUPABASE_ANON_KEY must be set in environment variables")
+    raise ValueError("SUPABASE_URL and SUPABASE_ANON_KEY must be set in environment variables")
 
 # Initialize Supabase client
 supabase: Client = create_client(SUPABASE_URL, SUPABASE_ANON_KEY)
