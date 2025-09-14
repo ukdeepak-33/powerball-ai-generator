@@ -399,8 +399,13 @@ def get_predictions(model):
 def read_root():
     """Returns the main HTML page"""
     try:
-        with open("index.html") as f:
+        # Get the directory of the current script file
+        base_dir = Path(__file__).parent
+        file_path = base_dir / "index.html"
+        
+        with open(file_path, "r") as f:
             return HTMLResponse(content=f.read())
+            
     except FileNotFoundError:
         return JSONResponse(status_code=404, content={"message": "index.html not found"})
     except Exception as e:
