@@ -116,6 +116,7 @@
                             <h3>Analysis:</h3>
                             <p>✅ <strong>${modelData.analysis.group_a_count} Group A numbers</strong> (high-frequency numbers)</p>
                             <p>🎯 <strong>${modelData.analysis.odd_even_ratio}</strong> odd/even ratio</p>
+                            <p>📅 <strong>2025 Frequency:</strong> ${modelData.generated_numbers.white_balls.map(num => num + ' (' + modelData.analysis['2025_frequency'].white_ball_counts[num] + ')').join(' - ')} ⚡ ${modelData.generated_numbers.powerball} (${modelData.analysis['2025_frequency'].powerball_count})</p>
                             <p>📊 ${modelData.analysis.message}</p>
                         `;
 
