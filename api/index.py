@@ -410,7 +410,7 @@ def read_root():
         return JSONResponse(status_code=404, content={"message": "index.html not found"})
     except Exception as e:
         return JSONResponse(status_code=500, content={"message": f"Error loading index.html: {str(e)}"})
-        
+
 @app.get("/historical_analysis")
 def get_historical_analysis(request: Request):
     """Returns a JSON object with historical analysis of Powerball draws."""
@@ -481,57 +481,71 @@ def load_models():
 # Load models at startup
 load_models()
 
+def analyze_prediction(white_balls, powerball, historical_data_all, historical_data_2025):
+    """Helper function to perform analysis on a given set of numbers."""
+    frequency_2025 = get_2025_frequencies(white_balls, powerball, historical_data_2025)
+    patterns = detect_number_patterns(white_balls)
+    pattern_analysis = analyze_pattern_history(patterns, historical_data_all)
+    formatted_patterns = format_pattern_analysis(pattern_analysis)
+    group_a_count = sum(1 for num in white_balls if num in GROUP_A_NUMBERS)
+    odd_count = sum(1 for num in white_balls if num % 2 == 1)
+    even_count = 5 - odd_count
+    odd_even_ratio = f"{odd_count}-{even_count}"
+    analysis_message = "Your numbers match the following historical patterns:\n" + formatted_patterns
+    return {
+        "generated_numbers": {
+            "white_balls": white_balls,
+            "powerball": powerball,
+            "lucky_group_a_numbers": list(GROUP_A_NUMBERS.intersection(set(white_balls)))
+        },
+        "analysis": {
+            "group_a_count": group_a_count,
+            "odd_even_ratio": odd_even_ratio,
+            "message": analysis_message,
+            "2025_frequency": frequency_2025,
+        }
+    }
+
 @app.get("/generate")
+@app.get("/generate_all")
 def generate_numbers(request: Request):
     """
-    Generates a set of Powerball numbers based on the trained models or a fallback method.
-    Includes analysis of the generated numbers against 2025 and historical data.
+    Generates a set of Powerball numbers from each model and the ensemble for comparison.
     """
     try:
-        # Use ensemble prediction if all models are available, otherwise use a single model
+        historical_data_2025 = fetch_2025_draws()
+        historical_data_all = fetch_historical_draws(limit=2000)
+        
+        predictions = {}
+        
+        # Generate predictions from each individual model
+        if models.get('random_forest'):
+            rf_balls, rf_pb = get_predictions(models['random_forest'])
+            predictions['random_forest'] = analyze_prediction(rf_balls, rf_pb, historical_data_all, historical_data_2025)
+            
+        if models.get('gradient_boosting'):
+            gb_balls, gb_pb = get_predictions(models['gradient_boosting'])
+            predictions['gradient_boosting'] = analyze_prediction(gb_balls, gb_pb, historical_data_all, historical_data_2025)
+
+        if models.get('knn'):
+            knn_balls, knn_pb = get_predictions(models['knn'])
+            predictions['knn'] = analyze_prediction(knn_balls, knn_pb, historical_data_all, historical_data_2025)
+            
+        # Generate ensemble prediction
         if all(model is not None for model in models.values()):
-            white_balls, powerball = ensemble_prediction(
+            ensemble_balls, ensemble_pb = ensemble_prediction(
                 models['random_forest'],
                 models['gradient_boosting'],
                 models['knn']
             )
+            predictions['ensemble'] = analyze_prediction(ensemble_balls, ensemble_pb, historical_data_all, historical_data_2025)
         else:
-            print("⚠️ Not all models loaded. Using Random Forest as primary or fallback.")
-            white_balls, powerball = get_predictions(models.get('random_forest', None))
+            # Fallback to smart generation if not all models are loaded
+            fallback_balls, fallback_pb = generate_smart_numbers(historical_data_all)
+            predictions['fallback'] = analyze_prediction(fallback_balls, fallback_pb, historical_data_all, historical_data_2025)
 
-        # Perform analysis on the generated numbers
-        historical_data_2025 = fetch_2025_draws()
-        historical_data_all = fetch_historical_draws(limit=2000)
-
-        # Get frequency counts for the generated numbers in 2025
-        frequency_2025 = get_2025_frequencies(white_balls, powerball, historical_data_2025)
-
-        # Analyze patterns in the generated numbers
-        patterns = detect_number_patterns(white_balls)
-        pattern_analysis = analyze_pattern_history(patterns, historical_data_all)
-        formatted_patterns = format_pattern_analysis(pattern_analysis)
-
-        # Count Group A numbers and odd/even ratio
-        group_a_count = sum(1 for num in white_balls if num in GROUP_A_NUMBERS)
-        odd_count = sum(1 for num in white_balls if num % 2 == 1)
-        even_count = 5 - odd_count
-        odd_even_ratio = f"{odd_count}-{even_count}"
-
-        # Combine analysis and generated numbers
-        analysis_message = "Your numbers match the following historical patterns:\n" + formatted_patterns
-        return JSONResponse({
-            "generated_numbers": {
-                "white_balls": white_balls,
-                "powerball": powerball,
-                "lucky_group_a_numbers": list(GROUP_A_NUMBERS.intersection(set(white_balls)))
-            },
-            "analysis": {
-                "group_a_count": group_a_count,
-                "odd_even_ratio": odd_even_ratio,
-                "message": analysis_message,
-                "2025_frequency": frequency_2025,
-            }
-        })
+        return JSONResponse(predictions)
+        
     except Exception as e:
         traceback.print_exc()
         return JSONResponse(status_code=500, content={"message": f"An unexpected error occurred: {str(e)}"})
