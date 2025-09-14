@@ -399,9 +399,9 @@ def get_predictions(model):
 def read_root():
     """Returns the main HTML page"""
     try:
-        # Get the directory of the current script file
-        base_dir = Path(__file__).parent
-        file_path = base_dir / "index.html"
+        # Get the path to the current file (index.py)
+        # Then navigate up one directory and into the 'templates' folder
+        file_path = Path(__file__).parent.parent / "templates" / "index.html"
         
         with open(file_path, "r") as f:
             return HTMLResponse(content=f.read())
@@ -410,7 +410,7 @@ def read_root():
         return JSONResponse(status_code=404, content={"message": "index.html not found"})
     except Exception as e:
         return JSONResponse(status_code=500, content={"message": f"Error loading index.html: {str(e)}"})
-
+        
 @app.get("/historical_analysis")
 def get_historical_analysis(request: Request):
     """Returns a JSON object with historical analysis of Powerball draws."""
