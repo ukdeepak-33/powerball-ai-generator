@@ -544,7 +544,10 @@ def generate_numbers(request: Request):
             fallback_balls, fallback_pb = generate_smart_numbers(historical_data_all)
             predictions['fallback'] = analyze_prediction(fallback_balls, fallback_pb, historical_data_all, historical_data_2025)
 
-        return JSONResponse(predictions)
+        # FIX: Convert numpy types to native Python types before returning
+        sanitized_predictions = convert_numpy_types(predictions)
+        
+        return JSONResponse(sanitized_predictions)
         
     except Exception as e:
         traceback.print_exc()
