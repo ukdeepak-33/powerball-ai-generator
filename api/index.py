@@ -434,21 +434,26 @@ def read_root():
     except Exception as e:
         return JSONResponse(status_code=500, content={"message": f"Error loading index.html: {str(e)}"})
 
+@app.get("/health")
+def health_check():
+    """Health check endpoint"""
+    return {"status": "healthy", "message": "Powerball AI Generator is running"}
+
 @app.get("/advanced_analytics")
 def get_advanced_analytics():
     """Provide deeper statistical insights"""
     return {
         "frequency_analysis": {
-            "hot_numbers": get_hot_numbers(last_n_draws=50),
-            "cold_numbers": get_cold_numbers(last_n_draws=50),
-            "overdue_numbers": get_overdue_numbers()
+            "hot_numbers": "Coming soon",
+            "cold_numbers": "Coming soon", 
+            "overdue_numbers": "Coming soon"
         },
         "pattern_analysis": {
-            "seasonal_trends": analyze_seasonal_patterns(),
-            "number_correlations": calculate_number_correlations(),
-            "draw_intervals": analyze_draw_intervals()
+            "seasonal_trends": "Coming soon",
+            "number_correlations": "Coming soon",
+            "draw_intervals": "Coming soon"
         },
-        "prediction_confidence": calculate_confidence_scores()
+        "prediction_confidence": "Coming soon"
     }
 
 @app.get("/historical_analysis")
@@ -592,3 +597,9 @@ def generate_numbers(request: Request):
     except Exception as e:
         traceback.print_exc()
         return JSONResponse(status_code=500, content={"message": f"An unexpected error occurred: {str(e)}"})
+
+# For running the app
+if __name__ == "__main__":
+    import uvicorn
+    port = int(os.environ.get("PORT", 8000))
+    uvicorn.run(app, host="0.0.0.0", port=port)
