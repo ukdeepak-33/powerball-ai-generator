@@ -490,6 +490,12 @@
             
             const analysis = document.createElement('div');
             analysis.className = 'analysis';
+
+            // Correctly construct the frequency string
+            const frequencyString = modelData.generated_numbers.white_balls.map(num => 
+                `${num} (${modelData.analysis['2025_frequency'].white_ball_counts[num]})`
+            ).join(' - ') + ` ⚡ ${modelData.generated_numbers.powerball} (${modelData.analysis['2025_frequency'].powerball_count})`;
+
             analysis.innerHTML = `
                 <h4>📊 Analysis</h4>
                 <div class="stat-item">
@@ -501,8 +507,8 @@
                     <span>${modelData.analysis.odd_even_ratio}</span>
                 </div>
                 <div class="stat-item">
-                    <span>2025 Frequency Total:</span>
-                    <span>${Object.values(modelData.analysis['2025_frequency'].white_ball_counts).reduce((a, b) => a + b, 0) + modelData.analysis['2025_frequency'].powerball_count}</span>
+                    <span>2025 Frequency:</span>
+                    <span>${frequencyString}</span>
                 </div>
             `;
             
