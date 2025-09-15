@@ -4,6 +4,9 @@ import numpy as np
 import traceback
 import joblib
 import os
+import logging
+import redis
+from prometheus_client import Counter, Histogram
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, HTMLResponse
@@ -13,6 +16,7 @@ from typing import Dict, List, Any, Set, Tuple, Optional
 from supabase import create_client, Client
 from dotenv import load_dotenv
 from pathlib import Path
+from functools import lru_cache
 from sklearn.ensemble import GradientBoostingClassifier, RandomForestClassifier
 from sklearn.neighbors import KNeighborsClassifier
 from sklearn.preprocessing import MultiLabelBinarizer
@@ -214,6 +218,27 @@ def analyze_pattern_history(patterns: Dict[str, Any], historical_data: List[dict
 
     return pattern_history
 
+def create_advanced_features(historical_data):
+    """Create more sophisticated features for better predictions"""
+    features = {
+        # Time-based features
+        'day_of_week': [],
+        'month': [],
+        'days_since_last_draw': [],
+        
+        # Number pattern features
+        'sum_of_numbers': [],
+        'number_spread': [],
+        'hot_numbers_count': [],
+        'cold_numbers_count': [],
+        
+        # Sequence features
+        'consecutive_count': [],
+        'gap_analysis': [],
+        'decade_distribution': []
+    }
+    # Implementation details...
+
 def format_pattern_analysis(pattern_history: Dict[str, Any]) -> str:
     """Format pattern analysis for display"""
     analysis_lines = []
@@ -410,6 +435,23 @@ def read_root():
         return JSONResponse(status_code=404, content={"message": "index.html not found"})
     except Exception as e:
         return JSONResponse(status_code=500, content={"message": f"Error loading index.html: {str(e)}"})
+
+@app.get("/advanced_analytics")
+def get_advanced_analytics():
+    """Provide deeper statistical insights"""
+    return {
+        "frequency_analysis": {
+            "hot_numbers": get_hot_numbers(last_n_draws=50),
+            "cold_numbers": get_cold_numbers(last_n_draws=50),
+            "overdue_numbers": get_overdue_numbers()
+        },
+        "pattern_analysis": {
+            "seasonal_trends": analyze_seasonal_patterns(),
+            "number_correlations": calculate_number_correlations(),
+            "draw_intervals": analyze_draw_intervals()
+        },
+        "prediction_confidence": calculate_confidence_scores()
+    }
 
 @app.get("/historical_analysis")
 def get_historical_analysis(request: Request):
