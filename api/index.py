@@ -5,7 +5,6 @@ import traceback
 import joblib
 import os
 import logging
-import redis
 from prometheus_client import Counter, Histogram
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
@@ -16,7 +15,6 @@ from typing import Dict, List, Any, Set, Tuple, Optional
 from supabase import create_client, Client
 from dotenv import load_dotenv
 from pathlib import Path
-from functools import lru_cache
 from sklearn.ensemble import GradientBoostingClassifier, RandomForestClassifier
 from sklearn.neighbors import KNeighborsClassifier
 from sklearn.preprocessing import MultiLabelBinarizer
@@ -547,17 +545,6 @@ def analyze_prediction(white_balls, powerball, historical_data_all, historical_d
             "2025_frequency": frequency_2025,
         }
     }
-
-# Add Redis caching
-redis_client = redis.Redis(host='localhost', port=6379, db=0)
-
-@lru_cache(maxsize=100)
-def get_cached_analysis(numbers_hash):
-    """Cache frequently requested analyses"""
-    pass
-
-# Add database connection pooling
-# Implement lazy loading for models
 
 @app.get("/generate")
 @app.get("/generate_all")
