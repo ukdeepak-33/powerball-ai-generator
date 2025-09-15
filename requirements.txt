@@ -8,3 +8,4 @@ numpy==2.2.2
 python-dotenv
 python-multipart
 joblib==1.5.2
+prometheus-client==0.20.0
