@@ -230,6 +230,24 @@
             border-bottom: 1px solid #dee2e6;
         }
         
+        .pattern-analysis {
+            background: #f8f9fa;
+            padding: 15px;
+            border-radius: 10px;
+            margin-top: 15px;
+        }
+
+        .pattern-analysis ul {
+            list-style-type: none;
+            padding-left: 0;
+        }
+
+        .pattern-analysis li {
+            margin-bottom: 5px;
+            font-size: 14px;
+            line-height: 1.4;
+        }
+
         .loading {
             text-align: center;
             padding: 50px;
@@ -512,14 +530,27 @@
                 </div>
             `;
             
+            // Add the pattern analysis box
             if (analysisDepth !== 'basic') {
-                const detailedAnalysis = document.createElement('div');
-                detailedAnalysis.innerHTML = `
-                    <p style="margin-top: 15px; font-size: 12px; color: #666;">
-                        ${modelData.analysis.message.replace(/\n/g, '<br>')}
-                    </p>
+                const patternAnalysis = document.createElement('div');
+                patternAnalysis.className = 'pattern-analysis';
+                
+                const messageLines = modelData.analysis.message.split('\n');
+                let listItems = '';
+                messageLines.forEach(line => {
+                    // Check if the line is not empty and starts with '•'
+                    if (line.trim().startsWith('•')) {
+                         listItems += `<li>${line.trim()}</li>`;
+                    }
+                });
+
+                patternAnalysis.innerHTML = `
+                    <h4>Your numbers match the following historical patterns:</h4>
+                    <ul>
+                        ${listItems}
+                    </ul>
                 `;
-                analysis.appendChild(detailedAnalysis);
+                card.appendChild(patternAnalysis);
             }
             
             card.appendChild(modelTitle);
