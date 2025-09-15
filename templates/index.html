@@ -230,24 +230,6 @@
             border-bottom: 1px solid #dee2e6;
         }
         
-        .pattern-analysis {
-            background: #f8f9fa;
-            padding: 15px;
-            border-radius: 10px;
-            margin-top: 15px;
-        }
-
-        .pattern-analysis ul {
-            list-style-type: none;
-            padding-left: 0;
-        }
-
-        .pattern-analysis li {
-            margin-bottom: 5px;
-            font-size: 14px;
-            line-height: 1.4;
-        }
-
         .loading {
             text-align: center;
             padding: 50px;
@@ -508,12 +490,6 @@
             
             const analysis = document.createElement('div');
             analysis.className = 'analysis';
-
-            // Correctly construct the frequency string
-            const frequencyString = modelData.generated_numbers.white_balls.map(num => 
-                `${num} (${modelData.analysis['2025_frequency'].white_ball_counts[num]})`
-            ).join(' - ') + ` ⚡ ${modelData.generated_numbers.powerball} (${modelData.analysis['2025_frequency'].powerball_count})`;
-
             analysis.innerHTML = `
                 <h4>📊 Analysis</h4>
                 <div class="stat-item">
@@ -525,32 +501,19 @@
                     <span>${modelData.analysis.odd_even_ratio}</span>
                 </div>
                 <div class="stat-item">
-                    <span>2025 Frequency:</span>
-                    <span>${frequencyString}</span>
+                    <span>2025 Frequency Total:</span>
+                    <span>${Object.values(modelData.analysis['2025_frequency'].white_ball_counts).reduce((a, b) => a + b, 0) + modelData.analysis['2025_frequency'].powerball_count}</span>
                 </div>
             `;
             
-            // Add the pattern analysis box
             if (analysisDepth !== 'basic') {
-                const patternAnalysis = document.createElement('div');
-                patternAnalysis.className = 'analysis'; // Use the same class to maintain style
-                
-                const messageLines = modelData.analysis.message.split('\n');
-                let listItems = '';
-                messageLines.forEach(line => {
-                    // Check if the line is not empty and starts with '•'
-                    if (line.trim().startsWith('•')) {
-                         listItems += `<li>${line.trim()}</li>`;
-                    }
-                });
-
-                patternAnalysis.innerHTML = `
-                    <h4>Your numbers match the following historical patterns:</h4>
-                    <ul>
-                        ${listItems}
-                    </ul>
+                const detailedAnalysis = document.createElement('div');
+                detailedAnalysis.innerHTML = `
+                    <p style="margin-top: 15px; font-size: 12px; color: #666;">
+                        ${modelData.analysis.message.replace(/\n/g, '<br>')}
+                    </p>
                 `;
-                card.appendChild(patternAnalysis);
+                analysis.appendChild(detailedAnalysis);
             }
             
             card.appendChild(modelTitle);
