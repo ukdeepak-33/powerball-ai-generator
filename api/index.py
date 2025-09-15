@@ -548,6 +548,17 @@ def analyze_prediction(white_balls, powerball, historical_data_all, historical_d
         }
     }
 
+# Add Redis caching
+redis_client = redis.Redis(host='localhost', port=6379, db=0)
+
+@lru_cache(maxsize=100)
+def get_cached_analysis(numbers_hash):
+    """Cache frequently requested analyses"""
+    pass
+
+# Add database connection pooling
+# Implement lazy loading for models
+
 @app.get("/generate")
 @app.get("/generate_all")
 def generate_numbers(request: Request):
