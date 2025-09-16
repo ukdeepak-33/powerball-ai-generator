@@ -1,0 +1,1381 @@
+# api/index.py - Corrected Integrated Advanced ML System
+import pandas as pd
+import numpy as np
+import traceback
+import joblib
+import os
+import logging
+import json
+import asyncio
+from datetime import datetime, timedelta
+from fastapi import FastAPI, HTTPException, Request, BackgroundTasks
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse, HTMLResponse
+from sklearn.multioutput import MultiOutputClassifier
+from collections import defaultdict, Counter, deque
+from typing import Dict, List, Any, Set, Tuple, Optional
+from supabase import create_client, Client
+from dotenv import load_dotenv
+from pathlib import Path
+from dataclasses import dataclass, asdict
+
+# ML Libraries
+from sklearn.ensemble import GradientBoostingClassifier, RandomForestClassifier
+from sklearn.neighbors import KNeighborsClassifier
+from sklearn.linear_model import LogisticRegression
+from sklearn.preprocessing import StandardScaler, MultiLabelBinarizer
+from sklearn.model_selection import cross_val_score, TimeSeriesSplit
+from sklearn.metrics import accuracy_score, precision_score, recall_score
+
+# Time Series Libraries
+try:
+    from tensorflow.keras.models import Sequential
+    from tensorflow.keras.layers import LSTM, Dense, Dropout
+    from tensorflow.keras.optimizers import Adam
+    TENSORFLOW_AVAILABLE = True
+except ImportError:
+    TENSORFLOW_AVAILABLE = False
+    logging.warning("TensorFlow not available, LSTM model disabled")
+
+try:
+    from statsmodels.tsa.arima.model import ARIMA
+    STATSMODELS_AVAILABLE = True
+except ImportError:
+    STATSMODELS_AVAILABLE = False
+    logging.warning("Statsmodels not available, ARIMA model disabled")
+
+import warnings
+warnings.filterwarnings('ignore')
+
+# Load environment variables
+load_dotenv()
+
+# Initialize FastAPI app
+app = FastAPI(title="Powerball AI Generator", version="2.0.0")
+
+# Add CORS middleware
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+# Setup logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
+# Configuration
+GROUP_A_NUMBERS = {3, 5, 6, 7, 9, 11, 15, 16, 18, 21, 23, 24, 27, 31, 32, 33, 36, 42, 44, 45, 48, 50, 51, 54, 55, 60, 66, 69}
+
+# Supabase Configuration
+SUPABASE_URL = os.environ.get("SUPABASE_URL", "https://yksxzbbcoitehdmsxqex.supabase.co")
+SUPABASE_ANON_KEY = os.environ.get("SUPABASE_ANON_KEY", "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inlrc3h6YmJjb2l0ZWhkbXN4cWV4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDk3NzMwNjUsImV4cCI6MjA2NTM0OTA2NX0.AzUD7wjR7VbvtUH27NDqJ3AlvFW0nCWpiN9ADG8T_t4")
+SUPABASE_TABLE_NAME = 'powerball_draws'
+
+if not SUPABASE_URL or not SUPABASE_ANON_KEY:
+    raise ValueError("SUPABASE_URL and SUPABASE_ANON_KEY must be set")
+
+supabase: Client = create_client(SUPABASE_URL, SUPABASE_ANON_KEY)
+
+# Data Classes
+@dataclass
+class ModelMetrics:
+    model_name: str
+    version: str
+    accuracy: float
+    precision: float
+    recall: float
+    training_time: float
+    prediction_count: int
+    last_updated: datetime
+    validation_score: float
+    
+    def to_dict(self):
+        return {
+            **asdict(self),
+            'last_updated': self.last_updated.isoformat()
+        }
+
+@dataclass
+class PredictionResult:
+    model_name: str
+    white_balls: List[int]
+    powerball: int
+    timestamp: datetime
+    confidence: float
+    actual_numbers: Optional[List[int]] = None
+    actual_powerball: Optional[int] = None
+    accuracy_score: Optional[float] = None
+    
+    def to_dict(self):
+        return {
+            **asdict(self),
+            'timestamp': self.timestamp.isoformat()
+        }
+
+# Advanced ML Components
+class ModelVersionManager:
+    def __init__(self, models_dir: str = "models"):
+        self.performance_tracker.add_prediction(prediction_result)
+        
+        return final_white_balls, powerball, {
+            "ensemble_weights": weights,
+            "model_confidences": confidences,
+            "ensemble_confidence": ensemble_confidence,
+            "individual_predictions": predictions
+        }
+    
+    def stacking_prediction(self) -> Tuple[List[int], int, float]:
+        """Generate predictions using stacking ensemble"""
+        try:
+            dummy_features = np.zeros((1, 74))
+            stacked_proba = self.stacking_ensemble.predict(dummy_features)
+            
+            if stacked_proba is not None and len(stacked_proba) > 0:
+                if len(stacked_proba.shape) > 1 and stacked_proba.shape[1] > 1:
+                    probabilities = stacked_proba[0, 1]
+                else:
+                    probabilities = stacked_proba[0]
+                
+                if np.isscalar(probabilities):
+                    probabilities = np.random.rand(69)
+                elif len(probabilities) != 69:
+                    probabilities = np.random.rand(69)
+                
+                top_indices = np.argsort(probabilities)[-5:]
+                white_balls = sorted([idx + 1 for idx in top_indices])
+                confidence = np.mean(probabilities[top_indices])
+            else:
+                white_balls = sorted(np.random.choice(range(1, 70), 5, replace=False))
+                confidence = 0.1
+            
+            powerball = np.random.randint(1, 27)
+            
+            prediction_result = PredictionResult(
+                model_name="stacking_ensemble",
+                white_balls=white_balls,
+                powerball=powerball,
+                timestamp=datetime.now(),
+                confidence=confidence
+            )
+            
+            self.performance_tracker.add_prediction(prediction_result)
+            return white_balls, powerball, confidence
+            
+        except Exception as e:
+            logger.error(f"Stacking prediction error: {e}")
+            white_balls, powerball, info = self.weighted_ensemble_prediction()
+            return white_balls, powerball, info.get('ensemble_confidence', 0.5)
+
+# Initialize global ML system
+ml_system = None
+
+def initialize_ml_system():
+    global ml_system
+    ml_system = AdvancedMLSystem(supabase)
+    logger.info("Advanced ML system initialized")
+
+# Helper functions
+def fetch_2025_draws() -> List[dict]:
+    try:
+        response = supabase.table(SUPABASE_TABLE_NAME) \
+                         .select('*') \
+                         .gte('"Draw Date"', '2025-01-01') \
+                         .lte('"Draw Date"', '2025-12-31') \
+                         .order('"Draw Date"', desc=True) \
+                         .execute()
+        return response.data
+    except Exception as e:
+        logger.error(f"Error fetching 2025 data: {e}")
+        return []
+
+def fetch_historical_draws(limit: int = 2000) -> List[dict]:
+    try:
+        response = supabase.table(SUPABASE_TABLE_NAME) \
+                         .select('*') \
+                         .order('"Draw Date"', desc=True) \
+                         .limit(limit) \
+                         .execute()
+        return response.data
+    except Exception as e:
+        logger.error(f"Error fetching data from Supabase: {e}")
+        return []
+
+def get_2025_frequencies(white_balls, powerball, historical_data):
+    if not historical_data:
+        return {
+            'white_ball_counts': {int(num): 0 for num in white_balls},
+            'powerball_count': 0,
+            'total_2025_draws': 0
+        }
+
+    df = pd.DataFrame(historical_data)
+    number_columns = ['Number 1', 'Number 2', 'Number 3', 'Number 4', 'Number 5']
+
+    white_ball_counts = {}
+    all_white_balls = []
+    for _, draw in df.iterrows():
+        all_white_balls.extend([draw[col] for col in number_columns])
+
+    white_ball_counter = Counter(all_white_balls)
+    for num in white_balls:
+        python_num = int(num)
+        white_ball_counts[python_num] = white_ball_counter.get(python_num, 0)
+
+    powerball_counts = Counter(df['Powerball'])
+    python_powerball = int(powerball)
+    powerball_count = powerball_counts.get(python_powerball, 0)
+
+    return {
+        'white_ball_counts': white_ball_counts,
+        'powerball_count': powerball_count,
+        'total_2025_draws': len(df)
+    }
+
+def detect_number_patterns(white_balls: List[int]) -> Dict[str, Any]:
+    """Detect various patterns in the generated numbers"""
+    patterns = {
+        'grouped_patterns': [],
+        'tens_apart': [],
+        'same_last_digit': [],
+        'consecutive_pairs': [],
+        'repeating_digit_pairs': []
+    }
+
+    if not white_balls or len(white_balls) < 2:
+        return patterns
+
+    sorted_balls = sorted(white_balls)
+
+    decade_groups = defaultdict(list)
+    for num in sorted_balls:
+        decade = (num - 1) // 10
+        decade_groups[decade].append(num)
+
+    for decade, numbers in decade_groups.items():
+        if len(numbers) >= 2:
+            patterns['grouped_patterns'].append({
+                'decade_range': f"{decade*10+1}-{(decade+1)*10}",
+                'numbers': numbers
+            })
+
+    for i in range(len(sorted_balls)):
+        for j in range(i + 1, len(sorted_balls)):
+            num1, num2 = sorted_balls[i], sorted_balls[j]
+            if abs(num1 - num2) % 10 == 0 and abs(num1 - num2) >= 10:
+                patterns['tens_apart'].append([num1, num2])
+            if num1 % 10 == num2 % 10:
+                patterns['same_last_digit'].append([num1, num2])
+
+    for i in range(len(sorted_balls) - 1):
+        if sorted_balls[i + 1] - sorted_balls[i] == 1:
+            patterns['consecutive_pairs'].append([sorted_balls[i], sorted_balls[i + 1]])
+
+    repeating_numbers = [num for num in sorted_balls if num < 70 and num % 11 == 0 and num > 0]
+    if len(repeating_numbers) >= 2:
+        for i in range(len(repeating_numbers)):
+            for j in range(i + 1, len(repeating_numbers)):
+                patterns['repeating_digit_pairs'].append([
+                    repeating_numbers[i],
+                    repeating_numbers[j]
+                ])
+
+    return patterns
+
+def analyze_pattern_history(patterns: Dict[str, Any], historical_data: List[dict]) -> Dict[str, Any]:
+    """Analyze historical occurrence of detected patterns"""
+    pattern_history = {
+        'grouped_patterns': [],
+        'tens_apart': [],
+        'same_last_digit': [],
+        'consecutive_pairs': [],
+        'repeating_digit_pairs': []
+    }
+
+    if not historical_data:
+        return pattern_history
+
+    df = pd.DataFrame(historical_data)
+    number_columns = ['Number 1', 'Number 2', 'Number 3', 'Number 4', 'Number 5']
+
+    for pattern_type, pattern_list in patterns.items():
+        if not pattern_list:
+            continue
+
+        for pattern in pattern_list:
+            history_info = {
+                'pattern': pattern,
+                'pattern_type': pattern_type,
+                'current_year_count': 0,
+                'total_count': 0,
+                'years_count': defaultdict(int)
+            }
+
+            for _, draw in df.iterrows():
+                draw_numbers = [draw[col] for col in number_columns]
+                draw_date = draw.get('Draw Date', '')
+                draw_year = draw_date[:4] if draw_date and isinstance(draw_date, str) else 'Unknown'
+
+                try:
+                    is_match = False
+                    if pattern_type == 'grouped_patterns':
+                        if all(num in draw_numbers for num in pattern.get('numbers', [])):
+                            is_match = True
+                    elif isinstance(pattern, list) and all(num in draw_numbers for num in pattern):
+                        is_match = True
+
+                    if is_match:
+                        history_info['total_count'] += 1
+                        history_info['years_count'][draw_year] += 1
+                        if draw_year == '2025':
+                            history_info['current_year_count'] += 1
+
+                except Exception as e:
+                    logger.error(f"Error analyzing pattern {pattern_type}: {pattern}, error: {e}")
+                    continue
+
+            pattern_history[pattern_type].append(history_info)
+
+    return pattern_history
+
+def format_pattern_analysis(pattern_history: Dict[str, Any]) -> str:
+    """Format pattern analysis for display"""
+    analysis_lines = []
+
+    for pattern_type, patterns in pattern_history.items():
+        if not patterns:
+            continue
+
+        for pattern_info in patterns:
+            pattern = pattern_info['pattern']
+            pattern_type = pattern_info['pattern_type']
+            current_count = pattern_info['current_year_count']
+            total_count = pattern_info['total_count']
+
+            if pattern_type == 'grouped_patterns':
+                pattern_str = f"Grouped ({pattern['decade_range']}): {', '.join(map(str, pattern['numbers']))}"
+            else:
+                readable_type = pattern_type.replace('_', ' ').title()
+                pattern_str = f"{readable_type}: {', '.join(map(str, pattern))}"
+
+            current_year_status = "Yes" if current_count > 0 else "No"
+            current_year_info = f"2025: {current_year_status}"
+            if current_count > 0:
+                current_year_info += f" ({current_count} times)"
+
+            if total_count > 0:
+                analysis_lines.append(f"• {pattern_str} → {current_year_info} | Total: {total_count}")
+            else:
+                analysis_lines.append(f"• {pattern_str} → Never occurred historically")
+
+    if not analysis_lines:
+        return "• No significant patterns detected"
+
+    return "\n".join(analysis_lines)
+
+def convert_numpy_types(data: Any) -> Any:
+    """Recursively converts numpy data types to standard Python types."""
+    if isinstance(data, dict):
+        return {convert_numpy_types(key): convert_numpy_types(value) for key, value in data.items()}
+    elif isinstance(data, list):
+        return [convert_numpy_types(element) for element in data]
+    elif isinstance(data, (np.integer, np.floating)):
+        return int(data) if isinstance(data, np.integer) else float(data)
+    elif isinstance(data, np.ndarray):
+        return data.tolist()
+    else:
+        return data
+
+def generate_smart_numbers(historical_data):
+    """Smart fallback number generation"""
+    if not historical_data:
+        return sorted(np.random.choice(range(1, 70), 5, replace=False)), np.random.randint(1, 27)
+        
+    all_numbers = []
+    for draw in historical_data:
+        all_numbers.extend([draw['Number 1'], draw['Number 2'], draw['Number 3'],
+                            draw['Number 4'], draw['Number 5']])
+
+    if not all_numbers:
+        return sorted(np.random.choice(range(1, 70), 5, replace=False)), np.random.randint(1, 27)
+
+    number_counts = Counter(all_numbers)
+    numbers, counts = zip(*number_counts.items())
+    total = sum(counts)
+    weights = [count/total for count in counts]
+
+    selected_numbers = []
+    while len(selected_numbers) < 5:
+        num = np.random.choice(numbers, p=weights)
+        if num not in selected_numbers:
+            selected_numbers.append(num)
+
+    powerball = np.random.randint(1, 27)
+    return sorted(selected_numbers), powerball
+
+def analyze_prediction(white_balls, powerball, historical_data_all, historical_data_2025):
+    """Helper function to perform analysis on a given set of numbers."""
+    frequency_2025 = get_2025_frequencies(white_balls, powerball, historical_data_2025)
+    patterns = detect_number_patterns(white_balls)
+    pattern_analysis = analyze_pattern_history(patterns, historical_data_all)
+    formatted_patterns = format_pattern_analysis(pattern_analysis)
+    group_a_count = sum(1 for num in white_balls if num in GROUP_A_NUMBERS)
+    odd_count = sum(1 for num in white_balls if num % 2 == 1)
+    even_count = 5 - odd_count
+    odd_even_ratio = f"{odd_count}-{even_count}"
+    analysis_message = "Your numbers match the following historical patterns:\n" + formatted_patterns
+    
+    return {
+        "generated_numbers": {
+            "white_balls": white_balls,
+            "powerball": powerball,
+            "lucky_group_a_numbers": list(GROUP_A_NUMBERS.intersection(set(white_balls)))
+        },
+        "analysis": {
+            "group_a_count": group_a_count,
+            "odd_even_ratio": odd_even_ratio,
+            "message": analysis_message,
+            "2025_frequency": frequency_2025,
+        }
+    }
+
+# API Endpoints
+@app.on_event("startup")
+async def startup_event():
+    """Initialize ML system on startup"""
+    initialize_ml_system()
+
+@app.get("/")
+def read_root():
+    """Returns the main HTML page"""
+    try:
+        file_path = Path(__file__).parent.parent / "templates" / "index.html"
+        with open(file_path, "r") as f:
+            return HTMLResponse(content=f.read())
+    except FileNotFoundError:
+        return JSONResponse(status_code=404, content={"message": "index.html not found"})
+    except Exception as e:
+        return JSONResponse(status_code=500, content={"message": f"Error loading index.html: {str(e)}"})
+
+@app.get("/health")
+def health_check():
+    """Health check endpoint"""
+    return {
+        "status": "healthy", 
+        "message": "Advanced Powerball AI Generator is running",
+        "ml_system_initialized": ml_system is not None,
+        "tensorflow_available": TENSORFLOW_AVAILABLE,
+        "statsmodels_available": STATSMODELS_AVAILABLE
+    }
+
+@app.get("/models/status")
+def get_models_status():
+    """Get status of all models"""
+    if not ml_system:
+        return {"error": "ML system not initialized"}
+    
+    status = {
+        "traditional_models": {},
+        "advanced_models": {},
+        "last_retrain": ml_system.last_retrain_check.isoformat(),
+        "model_metrics": {}
+    }
+    
+    for name, model in ml_system.base_models.items():
+        status["traditional_models"][name] = {
+            "loaded": model is not None,
+            "type": type(model).__name__
+        }
+    
+    status["advanced_models"]["lstm"] = {
+        "enabled": TENSORFLOW_AVAILABLE,
+        "trained": ml_system.lstm_model.model is not None
+    }
+    status["advanced_models"]["arima"] = {
+        "enabled": STATSMODELS_AVAILABLE,
+        "trained": bool(ml_system.arima_model.models)
+    }
+    
+    for name, metrics in ml_system.model_metrics.items():
+        status["model_metrics"][name] = metrics.to_dict()
+    
+    return status
+
+@app.post("/models/retrain")
+async def retrain_models(background_tasks: BackgroundTasks):
+    """Trigger model retraining"""
+    if not ml_system:
+        raise HTTPException(status_code=500, detail="ML system not initialized")
+    
+    async def retrain_task():
+        try:
+            await ml_system.retrain_models()
+            logger.info("Background retraining completed")
+        except Exception as e:
+            logger.error(f"Background retraining failed: {e}")
+    
+    background_tasks.add_task(retrain_task)
+    return {"message": "Model retraining started in background"}
+
+@app.get("/generate")
+def generate_numbers_basic(request: Request):
+    """Generate numbers using the best available model"""
+    return generate_numbers_advanced("ensemble", 1)
+
+@app.get("/generate/{model_type}")
+def generate_numbers_single_model(model_type: str, request: Request):
+    """Generate numbers using a specific model"""
+    return generate_numbers_advanced(model_type, 1)
+
+@app.get("/generate_advanced")
+def generate_numbers_advanced(model_type: str = "ensemble", count: int = 1):
+    """Generate numbers using advanced ML system"""
+    try:
+        if not ml_system:
+            raise HTTPException(status_code=500, detail="ML system not initialized")
+        
+        historical_data_2025 = fetch_2025_draws()
+        historical_data_all = fetch_historical_draws(limit=2000)
+        
+        predictions = {}
+        
+        for i in range(count):
+            suffix = f"_{i+1}" if count > 1 else ""
+            
+            if model_type == "ensemble":
+                white_balls, powerball, ensemble_info = ml_system.weighted_ensemble_prediction()
+                predictions[f"ensemble{suffix}"] = {
+                    **analyze_prediction(white_balls, powerball, historical_data_all, historical_data_2025),
+                    "ensemble_info": ensemble_info
+                }
+            
+            elif model_type in ml_system.base_models:
+                white_balls, powerball, info = ml_system.weighted_ensemble_prediction([model_type])
+                predictions[f"{model_type}{suffix}"] = {
+                    **analyze_prediction(white_balls, powerball, historical_data_all, historical_data_2025),
+                    "model_info": info
+                }
+            
+            elif model_type == "lstm" and TENSORFLOW_AVAILABLE:
+                recent_data = np.random.rand(20, 5)
+                white_balls = ml_system.lstm_model.predict(recent_data)
+                powerball = np.random.randint(1, 27)
+                predictions[f"lstm{suffix}"] = analyze_prediction(
+                    white_balls, powerball, historical_data_all, historical_data_2025
+                )
+            
+            elif model_type == "arima" and STATSMODELS_AVAILABLE:
+                white_balls = ml_system.arima_model.predict()
+                powerball = np.random.randint(1, 27)
+                predictions[f"arima{suffix}"] = analyze_prediction(
+                    white_balls, powerball, historical_data_all, historical_data_2025
+                )
+            
+            elif model_type == "stacking":
+                white_balls, powerball, confidence = ml_system.stacking_prediction()
+                predictions[f"stacking{suffix}"] = analyze_prediction(
+                    white_balls, powerball, historical_data_all, historical_data_2025
+                )
+            
+            else:
+                white_balls, powerball = generate_smart_numbers(historical_data_all)
+                predictions[f"fallback{suffix}"] = analyze_prediction(
+                    white_balls, powerball, historical_data_all, historical_data_2025
+                )
+        
+        return JSONResponse(convert_numpy_types(predictions))
+        
+    except Exception as e:
+        logger.error(f"Error in generate_numbers_advanced: {e}")
+        traceback.print_exc()
+        return JSONResponse(status_code=500, content={"message": f"An unexpected error occurred: {str(e)}"})
+
+@app.get("/generate_all")
+def generate_all_models():
+    """Generate predictions from all available models"""
+    try:
+        if not ml_system:
+            raise HTTPException(status_code=500, detail="ML system not initialized")
+        
+        historical_data_2025 = fetch_2025_draws()
+        historical_data_all = fetch_historical_draws(limit=2000)
+        
+        predictions = {}
+        
+        # Ensemble prediction
+        try:
+            white_balls, powerball, ensemble_info = ml_system.weighted_ensemble_prediction()
+            predictions['ensemble'] = {
+                **analyze_prediction(white_balls, powerball, historical_data_all, historical_data_2025),
+                "ensemble_info": ensemble_info
+            }
+        except Exception as e:
+            logger.error(f"Ensemble prediction failed: {e}")
+        
+        # Individual traditional models
+        for model_name in ml_system.base_models.keys():
+            try:
+                white_balls, powerball, info = ml_system.weighted_ensemble_prediction([model_name])
+                predictions[model_name] = {
+                    **analyze_prediction(white_balls, powerball, historical_data_all, historical_data_2025),
+                    "model_info": info
+                }
+            except Exception as e:
+                logger.error(f"{model_name} prediction failed: {e}")
+        
+        # Stacking ensemble
+        try:
+            white_balls, powerball, confidence = ml_system.stacking_prediction()
+            predictions['stacking'] = analyze_prediction(
+                white_balls, powerball, historical_data_all, historical_data_2025
+            )
+        except Exception as e:
+            logger.error(f"Stacking prediction failed: {e}")
+        
+        # LSTM model
+        if TENSORFLOW_AVAILABLE:
+            try:
+                recent_data = np.random.rand(20, 5)
+                white_balls = ml_system.lstm_model.predict(recent_data)
+                powerball = np.random.randint(1, 27)
+                predictions['lstm'] = analyze_prediction(
+                    white_balls, powerball, historical_data_all, historical_data_2025
+                )
+            except Exception as e:
+                logger.error(f"LSTM prediction failed: {e}")
+        
+        # ARIMA model
+        if STATSMODELS_AVAILABLE:
+            try:
+                white_balls = ml_system.arima_model.predict()
+                powerball = np.random.randint(1, 27)
+                predictions['arima'] = analyze_prediction(
+                    white_balls, powerball, historical_data_all, historical_data_2025
+                )
+            except Exception as e:
+                logger.error(f"ARIMA prediction failed: {e}")
+        
+        if not predictions:
+            white_balls, powerball = generate_smart_numbers(historical_data_all)
+            predictions['fallback'] = analyze_prediction(
+                white_balls, powerball, historical_data_all, historical_data_2025
+            )
+        
+        return JSONResponse(convert_numpy_types(predictions))
+        
+    except Exception as e:
+        logger.error(f"Error in generate_all_models: {e}")
+        traceback.print_exc()
+        return JSONResponse(status_code=500, content={"message": f"An unexpected error occurred: {str(e)}"})
+
+@app.get("/analytics/performance")
+def get_performance_analytics():
+    """Get model performance analytics"""
+    if not ml_system:
+        return {"error": "ML system not initialized"}
+    
+    analytics = {
+        "total_predictions": len(ml_system.performance_tracker.predictions_history),
+        "model_performance": {},
+        "ensemble_weights": ml_system.performance_tracker.performance_weights
+    }
+    
+    all_models = list(ml_system.base_models.keys())
+    if TENSORFLOW_AVAILABLE:
+        all_models.append('lstm')
+    if STATSMODELS_AVAILABLE:
+        all_models.append('arima')
+    
+    for model_name in all_models:
+        performance = ml_system.performance_tracker.get_model_performance(model_name)
+        analytics["model_performance"][model_name] = performance
+    
+    return analytics
+
+@app.get("/analytics/predictions")
+def get_prediction_history(limit: int = 50):
+    """Get recent prediction history"""
+    if not ml_system:
+        return {"error": "ML system not initialized"}
+    
+    history = []
+    for pred in list(ml_system.performance_tracker.predictions_history)[-limit:]:
+        history.append(pred.to_dict())
+    
+    return {"prediction_history": history}
+
+@app.get("/historical_analysis")
+def get_historical_analysis(request: Request):
+    """Returns historical analysis of Powerball draws"""
+    try:
+        historical_draws = fetch_historical_draws(limit=2000)
+        if not historical_draws:
+            raise HTTPException(status_code=404, detail="No historical data found")
+
+        df = pd.DataFrame(historical_draws)
+        white_ball_columns = ['Number 1', 'Number 2', 'Number 3', 'Number 4', 'Number 5']
+        
+        def has_consecutive(row):
+            sorted_nums = sorted([row[col] for col in white_ball_columns])
+            for i in range(len(sorted_nums) - 1):
+                if sorted_nums[i+1] - sorted_nums[i] == 1:
+                    return True
+            return False
+
+        df['group_a_count'] = df[white_ball_columns].apply(
+            lambda x: sum(1 for num in x if num in GROUP_A_NUMBERS), axis=1)
+        df['odd_count'] = df[white_ball_columns].apply(
+            lambda x: sum(1 for num in x if num % 2 == 1), axis=1)
+        df['has_consecutive'] = df.apply(has_consecutive, axis=1)
+
+        return {
+            "historical_analysis": {
+                "total_draws_analyzed": len(df),
+                "average_group_a_numbers": round(df['group_a_count'].mean(), 2),
+                "consecutive_draw_frequency": round(df['has_consecutive'].mean() * 100, 2),
+                "average_odd_numbers": round(df['odd_count'].mean(), 2),
+                "ml_system_status": {
+                    "initialized": ml_system is not None,
+                    "models_trained": len(ml_system.model_metrics) if ml_system else 0,
+                    "last_retrain": ml_system.last_retrain_check.isoformat() if ml_system else None
+                }
+            }
+        }
+
+    except Exception as e:
+        logger.error(f"Error in historical_analysis: {e}")
+        traceback.print_exc()
+        return JSONResponse(status_code=500, content={"message": f"Error: {str(e)}"})
+
+@app.get("/advanced_analytics")
+def get_advanced_analytics():
+    """Provide deeper statistical insights"""
+    try:
+        if not ml_system:
+            return {"error": "ML system not initialized"}
+        
+        historical_data = fetch_historical_draws(limit=1000)
+        if not historical_data:
+            return {"error": "No historical data available"}
+        
+        df = pd.DataFrame(historical_data)
+        white_ball_columns = ['Number 1', 'Number 2', 'Number 3', 'Number 4', 'Number 5']
+        
+        all_numbers = []
+        for _, row in df.iterrows():
+            all_numbers.extend([row[col] for col in white_ball_columns])
+        
+        number_freq = pd.Series(all_numbers).value_counts()
+        hot_numbers = number_freq.head(15).to_dict()
+        cold_numbers = number_freq.tail(15).to_dict()
+        
+        pattern_counts = {
+            'consecutive_pairs': 0,
+            'same_last_digit': 0,
+            'grouped_patterns': 0
+        }
+        
+        for _, row in df.iterrows():
+            numbers = sorted([row[col] for col in white_ball_columns])
+            
+            for i in range(len(numbers) - 1):
+                if numbers[i + 1] - numbers[i] == 1:
+                    pattern_counts['consecutive_pairs'] += 1
+                    break
+            
+            last_digits = [num % 10 for num in numbers]
+            if len(set(last_digits)) < len(last_digits):
+                pattern_counts['same_last_digit'] += 1
+        
+        return {
+            "frequency_analysis": {
+                "hot_numbers": hot_numbers,
+                "cold_numbers": cold_numbers,
+                "total_draws_analyzed": len(df)
+            },
+            "pattern_analysis": {
+                "consecutive_frequency": round(pattern_counts['consecutive_pairs'] / len(df) * 100, 2),
+                "same_last_digit_frequency": round(pattern_counts['same_last_digit'] / len(df) * 100, 2),
+                "total_patterns_detected": sum(pattern_counts.values())
+            },
+            "model_insights": {
+                "ensemble_confidence": ml_system.performance_tracker.performance_weights,
+                "prediction_accuracy": "Available after actual draws",
+                "model_versions": ml_system.version_manager.version_history
+            }
+        }
+        
+    except Exception as e:
+        logger.error(f"Error in advanced_analytics: {e}")
+        return {"error": f"Analytics error: {str(e)}"}
+
+if __name__ == "__main__":
+    import uvicorn
+    port = int(os.environ.get("PORT", 8000))
+    uvicorn.run(app, host="0.0.0.0", port=port)models_dir = Path(models_dir)
+        self.models_dir.mkdir(exist_ok=True)
+        self.version_history = self._load_version_history()
+        self.current_versions = {}
+        
+    def _load_version_history(self) -> Dict:
+        version_file = self.models_dir / "version_history.json"
+        if version_file.exists():
+            with open(version_file, 'r') as f:
+                return json.load(f)
+        return {}
+    
+    def save_version_history(self):
+        version_file = self.models_dir / "version_history.json"
+        with open(version_file, 'w') as f:
+            json.dump(self.version_history, f, indent=2, default=str)
+    
+    def create_version(self, model_name: str) -> str:
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        version = f"v_{timestamp}"
+        
+        if model_name not in self.version_history:
+            self.version_history[model_name] = []
+        
+        self.version_history[model_name].append({
+            "version": version,
+            "created_at": datetime.now().isoformat(),
+            "status": "active"
+        })
+        
+        self.save_version_history()
+        return version
+    
+    def get_model_path(self, model_name: str, version: str) -> Path:
+        return self.models_dir / f"{model_name}_{version}.joblib"
+
+class PerformanceTracker:
+    def __init__(self, max_history: int = 1000):
+        self.max_history = max_history
+        self.predictions_history = deque(maxlen=max_history)
+        self.model_metrics = {}
+        self.performance_weights = {}
+        
+    def add_prediction(self, prediction: PredictionResult):
+        self.predictions_history.append(prediction)
+        logger.info(f"Added prediction from {prediction.model_name}")
+    
+    def update_prediction_result(self, prediction_id: int, actual_white_balls: List[int], actual_powerball: int):
+        if prediction_id < len(self.predictions_history):
+            prediction = self.predictions_history[prediction_id]
+            prediction.actual_numbers = actual_white_balls
+            prediction.actual_powerball = actual_powerball
+            prediction.accuracy_score = self._calculate_accuracy(prediction)
+    
+    def _calculate_accuracy(self, prediction: PredictionResult) -> float:
+        if not prediction.actual_numbers:
+            return 0.0
+        
+        white_matches = len(set(prediction.white_balls) & set(prediction.actual_numbers))
+        powerball_match = 1 if prediction.powerball == prediction.actual_powerball else 0
+        
+        return (white_matches * 0.8 + powerball_match * 0.2) / 5.0
+    
+    def get_model_performance(self, model_name: str, days: int = 30) -> Dict[str, float]:
+        cutoff_date = datetime.now() - timedelta(days=days)
+        recent_predictions = [
+            p for p in self.predictions_history 
+            if p.model_name == model_name and p.timestamp >= cutoff_date and p.accuracy_score is not None
+        ]
+        
+        if not recent_predictions:
+            return {"accuracy": 0.0, "count": 0, "avg_confidence": 0.0}
+        
+        accuracies = [p.accuracy_score for p in recent_predictions]
+        confidences = [p.confidence for p in recent_predictions]
+        
+        return {
+            "accuracy": np.mean(accuracies),
+            "count": len(recent_predictions),
+            "avg_confidence": np.mean(confidences),
+            "std_accuracy": np.std(accuracies)
+        }
+    
+    def calculate_ensemble_weights(self, model_names: List[str]) -> Dict[str, float]:
+        weights = {}
+        total_weight = 0
+        
+        for model_name in model_names:
+            performance = self.get_model_performance(model_name)
+            weight = performance["accuracy"] * (1 + performance["avg_confidence"]) * np.sqrt(performance["count"] + 1)
+            weights[model_name] = max(weight, 0.1)
+            total_weight += weights[model_name]
+        
+        if total_weight > 0:
+            weights = {k: v / total_weight for k, v in weights.items()}
+        else:
+            equal_weight = 1.0 / len(model_names)
+            weights = {k: equal_weight for k in model_names}
+        
+        self.performance_weights = weights
+        return weights
+
+class LSTMTimeSeriesModel:
+    def __init__(self, sequence_length: int = 10, lstm_units: int = 50):
+        self.sequence_length = sequence_length
+        self.lstm_units = lstm_units
+        self.model = None
+        self.scaler = StandardScaler()
+        self.enabled = TENSORFLOW_AVAILABLE
+        
+    def prepare_sequences(self, data: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
+        if not self.enabled:
+            return np.array([]), np.array([])
+        
+        sequences = []
+        targets = []
+        
+        for i in range(len(data) - self.sequence_length):
+            sequences.append(data[i:i + self.sequence_length])
+            targets.append(data[i + self.sequence_length])
+        
+        return np.array(sequences), np.array(targets)
+    
+    def build_model(self, input_shape: Tuple[int, int]):
+        if not self.enabled:
+            return
+        
+        self.model = Sequential([
+            LSTM(self.lstm_units, return_sequences=True, input_shape=input_shape),
+            Dropout(0.2),
+            LSTM(self.lstm_units, return_sequences=False),
+            Dropout(0.2),
+            Dense(69, activation='softmax')
+        ])
+        
+        self.model.compile(
+            optimizer=Adam(learning_rate=0.001),
+            loss='sparse_categorical_crossentropy',
+            metrics=['accuracy']
+        )
+    
+    def train(self, historical_data: List[Dict]) -> float:
+        if not self.enabled:
+            logger.warning("LSTM training skipped - TensorFlow not available")
+            return 0.0
+        
+        sequences = []
+        for draw in historical_data:
+            white_balls = [draw['Number 1'], draw['Number 2'], draw['Number 3'], 
+                          draw['Number 4'], draw['Number 5']]
+            sequences.append(white_balls)
+        
+        if len(sequences) < self.sequence_length + 10:
+            logger.warning("Insufficient data for LSTM training")
+            return 0.0
+        
+        sequences = np.array(sequences)
+        sequences_scaled = self.scaler.fit_transform(sequences)
+        
+        X, y = self.prepare_sequences(sequences_scaled)
+        
+        if len(X) < self.sequence_length:
+            return 0.0
+        
+        if self.model is None:
+            self.build_model((self.sequence_length, sequences.shape[1]))
+        
+        try:
+            history = self.model.fit(
+                X, y[:, 0],
+                epochs=50,
+                batch_size=32,
+                validation_split=0.2,
+                verbose=0
+            )
+            return history.history['val_accuracy'][-1] if 'val_accuracy' in history.history else 0.0
+        except Exception as e:
+            logger.error(f"LSTM training error: {e}")
+            return 0.0
+    
+    def predict(self, recent_sequences: np.ndarray) -> List[int]:
+        if not self.enabled or self.model is None:
+            return list(np.random.choice(range(1, 70), 5, replace=False))
+        
+        try:
+            scaled_input = self.scaler.transform(recent_sequences)
+            last_sequence = scaled_input[-self.sequence_length:].reshape(1, self.sequence_length, -1)
+            
+            probabilities = self.model.predict(last_sequence, verbose=0)[0]
+            top_indices = np.argsort(probabilities)[-5:]
+            return sorted([idx + 1 for idx in top_indices])
+        except Exception as e:
+            logger.error(f"LSTM prediction error: {e}")
+            return list(np.random.choice(range(1, 70), 5, replace=False))
+
+class ARIMAModel:
+    def __init__(self, order: Tuple[int, int, int] = (1, 1, 1)):
+        self.order = order
+        self.models = {}
+        self.enabled = STATSMODELS_AVAILABLE
+        
+    def train(self, historical_data: List[Dict]) -> Dict[str, float]:
+        if not self.enabled:
+            logger.warning("ARIMA training skipped - Statsmodels not available")
+            return {}
+        
+        scores = {}
+        
+        for pos in range(1, 6):
+            series = [draw[f'Number {pos}'] for draw in historical_data[-100:]]
+            
+            try:
+                model = ARIMA(series, order=self.order)
+                fitted_model = model.fit()
+                self.models[f'pos_{pos}'] = fitted_model
+                scores[f'pos_{pos}'] = fitted_model.aic
+            except Exception as e:
+                logger.warning(f"ARIMA training failed for position {pos}: {e}")
+                scores[f'pos_{pos}'] = float('inf')
+        
+        return scores
+    
+    def predict(self) -> List[int]:
+        if not self.enabled:
+            return list(np.random.choice(range(1, 70), 5, replace=False))
+        
+        predictions = []
+        
+        for pos in range(1, 6):
+            model_key = f'pos_{pos}'
+            if model_key in self.models:
+                try:
+                    forecast = self.models[model_key].forecast(steps=1)
+                    predicted_value = max(1, min(69, int(round(forecast[0]))))
+                    predictions.append(predicted_value)
+                except Exception:
+                    predictions.append(np.random.randint(1, 70))
+            else:
+                predictions.append(np.random.randint(1, 70))
+        
+        # Ensure no duplicates
+        seen = set()
+        final_predictions = []
+        for pred in predictions:
+            while pred in seen:
+                pred = np.random.randint(1, 70)
+            seen.add(pred)
+            final_predictions.append(pred)
+        
+        return sorted(final_predictions)
+
+class StackingEnsemble:
+    """Stacking ensemble with meta-learner"""
+    
+    def __init__(self):
+        self.base_models = {}
+        self.meta_learner = LogisticRegression()
+        self.scaler = StandardScaler()
+        
+    def add_base_model(self, name: str, model):
+        """Add a base model to the ensemble"""
+        self.base_models[name] = model
+    
+    def train_meta_learner(self, X: np.ndarray, y: np.ndarray):
+        """Train the meta-learner using base model predictions"""
+        base_predictions = []
+        
+        for name, model in self.base_models.items():
+            if hasattr(model, 'predict_proba'):
+                pred = model.predict_proba(X)
+                if len(pred) > 0 and hasattr(pred[0], 'shape'):
+                    combined_proba = np.mean([p[:, 1] if p.shape[1] > 1 else p[:, 0] for p in pred], axis=0)
+                else:
+                    combined_proba = np.random.rand(X.shape[0])
+                base_predictions.append(combined_proba)
+            else:
+                pred = model.predict(X)
+                base_predictions.append(pred.ravel() if hasattr(pred, 'ravel') else pred)
+        
+        if base_predictions:
+            stacked_features = np.column_stack(base_predictions)
+            stacked_features_scaled = self.scaler.fit_transform(stacked_features)
+            self.meta_learner.fit(stacked_features_scaled, y.ravel() if hasattr(y, 'ravel') else y)
+            logger.info("Meta-learner trained successfully")
+    
+    def predict(self, X: np.ndarray) -> np.ndarray:
+        """Make predictions using the stacking ensemble"""
+        base_predictions = []
+        
+        for name, model in self.base_models.items():
+            if hasattr(model, 'predict_proba'):
+                pred = model.predict_proba(X)
+                if len(pred) > 0 and hasattr(pred[0], 'shape'):
+                    combined_proba = np.mean([p[:, 1] if p.shape[1] > 1 else p[:, 0] for p in pred], axis=0)
+                else:
+                    combined_proba = np.random.rand(X.shape[0])
+                base_predictions.append(combined_proba)
+            else:
+                pred = model.predict(X)
+                base_predictions.append(pred.ravel() if hasattr(pred, 'ravel') else pred)
+        
+        if base_predictions:
+            stacked_features = np.column_stack(base_predictions)
+            stacked_features_scaled = self.scaler.transform(stacked_features)
+            return self.meta_learner.predict_proba(stacked_features_scaled)
+        
+        return np.random.rand(X.shape[0], 2)
+
+class AdvancedMLSystem:
+    def __init__(self, supabase_client):
+        self.supabase = supabase_client
+        self.version_manager = ModelVersionManager()
+        self.performance_tracker = PerformanceTracker()
+        self.lstm_model = LSTMTimeSeriesModel()
+        self.arima_model = ARIMAModel()
+        self.stacking_ensemble = StackingEnsemble()
+        
+        # Traditional models
+        self.base_models = {
+            'random_forest': MultiOutputClassifier(RandomForestClassifier(n_estimators=100, random_state=42)),
+            'gradient_boosting': MultiOutputClassifier(GradientBoostingClassifier(n_estimators=100, random_state=42)),
+            'knn': MultiOutputClassifier(KNeighborsClassifier(n_neighbors=5))
+        }
+        
+        self.last_retrain_check = datetime.now()
+        self.retrain_interval = timedelta(days=1)
+        self.model_metrics = {}
+        
+    def prepare_features(self, historical_data: List[Dict]) -> Tuple[np.ndarray, np.ndarray]:
+        features = []
+        targets = []
+        
+        for i, draw in enumerate(historical_data[:-1]):
+            # Time-based features
+            draw_date = pd.to_datetime(draw['Draw Date'])
+            day_of_week = draw_date.dayofweek
+            month = draw_date.month
+            days_since_epoch = (draw_date - pd.Timestamp('2000-01-01')).days
+            
+            # Historical frequency features
+            prev_draws = historical_data[max(0, i-50):i]
+            if prev_draws:
+                all_numbers = []
+                for prev_draw in prev_draws:
+                    all_numbers.extend([prev_draw['Number 1'], prev_draw['Number 2'], 
+                                      prev_draw['Number 3'], prev_draw['Number 4'], prev_draw['Number 5']])
+                
+                number_freq = pd.Series(all_numbers).value_counts()
+                hot_numbers = number_freq.head(10).index.tolist() if len(number_freq) > 0 else list(range(1, 11))
+                cold_numbers = number_freq.tail(10).index.tolist() if len(number_freq) > 0 else list(range(60, 70))
+            else:
+                hot_numbers = list(range(1, 11))
+                cold_numbers = list(range(60, 70))
+            
+            # Feature vector
+            current_numbers = [draw['Number 1'], draw['Number 2'], draw['Number 3'], 
+                             draw['Number 4'], draw['Number 5']]
+            
+            feature_vector = [
+                day_of_week,
+                month,
+                days_since_epoch / 10000,
+                len(set(hot_numbers) & set(current_numbers)),
+                len(set(cold_numbers) & set(current_numbers))
+            ]
+            
+            # One-hot encoding for previous draw numbers
+            prev_numbers_encoded = [0] * 69
+            for num in current_numbers:
+                if 1 <= num <= 69:
+                    prev_numbers_encoded[num - 1] = 1
+            
+            feature_vector.extend(prev_numbers_encoded)
+            features.append(feature_vector)
+            
+            # Target (next draw numbers as binary vector)
+            next_draw = historical_data[i + 1]
+            target_vector = [0] * 69
+            for num in [next_draw['Number 1'], next_draw['Number 2'], next_draw['Number 3'], 
+                       next_draw['Number 4'], next_draw['Number 5']]:
+                if 1 <= num <= 69:
+                    target_vector[num - 1] = 1
+            
+            targets.append(target_vector)
+        
+        return np.array(features), np.array(targets)
+    
+    async def retrain_models(self) -> Dict[str, ModelMetrics]:
+        logger.info("Starting model retraining...")
+        
+        try:
+            response = self.supabase.table('powerball_draws').select('*').order('"Draw Date"', desc=True).limit(2000).execute()
+            if not response.data:
+                raise Exception("No historical data available")
+            
+            historical_data = response.data
+            X, y = self.prepare_features(historical_data)
+            
+            if len(X) == 0:
+                raise Exception("Insufficient data for training")
+            
+            model_metrics = {}
+            
+            # Train traditional models
+            for model_name, model in self.base_models.items():
+                start_time = datetime.now()
+                
+                try:
+                    cv_scores = cross_val_score(model, X, y, cv=TimeSeriesSplit(n_splits=3), scoring='accuracy')
+                    model.fit(X, y)
+                    
+                    version = self.version_manager.create_version(model_name)
+                    model_path = self.version_manager.get_model_path(model_name, version)
+                    joblib.dump(model, model_path)
+                    
+                    training_time = (datetime.now() - start_time).total_seconds()
+                    
+                    metrics = ModelMetrics(
+                        model_name=model_name,
+                        version=version,
+                        accuracy=cv_scores.mean(),
+                        precision=cv_scores.std(),
+                        recall=cv_scores.std(),
+                        training_time=training_time,
+                        prediction_count=0,
+                        last_updated=datetime.now(),
+                        validation_score=cv_scores.mean()
+                    )
+                    
+                    model_metrics[model_name] = metrics
+                    self.model_metrics[model_name] = metrics
+                    logger.info(f"Retrained {model_name} - Accuracy: {metrics.accuracy:.4f}")
+                    
+                    # Add to stacking ensemble
+                    self.stacking_ensemble.add_base_model(model_name, model)
+                    
+                except Exception as e:
+                    logger.error(f"Error retraining {model_name}: {e}")
+            
+            # Train stacking ensemble meta-learner
+            if len(self.stacking_ensemble.base_models) > 0:
+                try:
+                    self.stacking_ensemble.train_meta_learner(X, y.argmax(axis=1))
+                    logger.info("Trained stacking ensemble meta-learner")
+                except Exception as e:
+                    logger.error(f"Error training stacking ensemble: {e}")
+            
+            # Train time series models
+            if TENSORFLOW_AVAILABLE:
+                try:
+                    lstm_score = self.lstm_model.train(historical_data)
+                    model_metrics['lstm'] = ModelMetrics(
+                        model_name='lstm',
+                        version=self.version_manager.create_version('lstm'),
+                        accuracy=lstm_score,
+                        precision=0.0,
+                        recall=0.0,
+                        training_time=0.0,
+                        prediction_count=0,
+                        last_updated=datetime.now(),
+                        validation_score=lstm_score
+                    )
+                except Exception as e:
+                    logger.error(f"Error training LSTM: {e}")
+            
+            if STATSMODELS_AVAILABLE:
+                try:
+                    arima_scores = self.arima_model.train(historical_data)
+                    if arima_scores:
+                        avg_aic = np.mean([score for score in arima_scores.values() if score != float('inf')])
+                        model_metrics['arima'] = ModelMetrics(
+                            model_name='arima',
+                            version=self.version_manager.create_version('arima'),
+                            accuracy=1.0 / (1.0 + avg_aic / 1000),
+                            precision=0.0,
+                            recall=0.0,
+                            training_time=0.0,
+                            prediction_count=0,
+                            last_updated=datetime.now(),
+                            validation_score=avg_aic
+                        )
+                except Exception as e:
+                    logger.error(f"Error training ARIMA: {e}")
+            
+            self.last_retrain_check = datetime.now()
+            return model_metrics
+            
+        except Exception as e:
+            logger.error(f"Error during model retraining: {e}")
+            return {}
+    
+    def weighted_ensemble_prediction(self, models_to_use: List[str] = None) -> Tuple[List[int], int, Dict[str, Any]]:
+        if models_to_use is None:
+            models_to_use = list(self.base_models.keys())
+            if TENSORFLOW_AVAILABLE:
+                models_to_use.append('lstm')
+            if STATSMODELS_AVAILABLE:
+                models_to_use.append('arima')
+        
+        weights = self.performance_tracker.calculate_ensemble_weights(models_to_use)
+        predictions = {}
+        confidences = {}
+        
+        # Get predictions from each model
+        for model_name in models_to_use:
+            try:
+                if model_name in self.base_models:
+                    dummy_features = np.zeros((1, 74))
+                    
+                    try:
+                        proba = self.base_models[model_name].predict_proba(dummy_features)
+                        if len(proba) > 0:
+                            avg_proba = np.mean([p[:, 1] if p.shape[1] > 1 else p.ravel() for p in proba], axis=0)
+                            top_indices = np.argsort(avg_proba)[-5:]
+                            predictions[model_name] = sorted([idx + 1 for idx in top_indices])
+                            confidences[model_name] = np.mean(avg_proba[top_indices])
+                        else:
+                            raise Exception("No probabilities returned")
+                    except Exception:
+                        predictions[model_name] = sorted(np.random.choice(range(1, 70), 5, replace=False))
+                        confidences[model_name] = 0.5
+                        
+                elif model_name == 'lstm' and TENSORFLOW_AVAILABLE:
+                    recent_data = np.random.rand(20, 5)
+                    predictions[model_name] = self.lstm_model.predict(recent_data)
+                    confidences[model_name] = 0.7
+                    
+                elif model_name == 'arima' and STATSMODELS_AVAILABLE:
+                    predictions[model_name] = self.arima_model.predict()
+                    confidences[model_name] = 0.6
+                    
+            except Exception as e:
+                logger.warning(f"Error getting prediction from {model_name}: {e}")
+                predictions[model_name] = sorted(np.random.choice(range(1, 70), 5, replace=False))
+                confidences[model_name] = 0.1
+        
+        # Weighted voting for final prediction
+        number_votes = defaultdict(float)
+        total_weight = sum(weights.values()) if weights else 1.0
+        
+        for model_name, model_predictions in predictions.items():
+            model_weight = weights.get(model_name, 0.1) / total_weight
+            for number in model_predictions:
+                number_votes[number] += model_weight
+        
+        # Select top 5 numbers by weighted votes
+        if number_votes:
+            sorted_numbers = sorted(number_votes.items(), key=lambda x: x[1], reverse=True)
+            final_white_balls = [num for num, _ in sorted_numbers[:5]]
+        else:
+            final_white_balls = sorted(np.random.choice(range(1, 70), 5, replace=False))
+        
+        powerball = np.random.randint(1, 27)
+        ensemble_confidence = np.mean([confidences[name] * weights.get(name, 0.1) for name in predictions.keys()]) if confidences else 0.5
+        
+        # Record prediction
+        prediction_result = PredictionResult(
+            model_name="weighted_ensemble",
+            white_balls=final_white_balls,
+            powerball=powerball,
+            timestamp=datetime.now(),
+            confidence=ensemble_confidence
+        )
+        
+        self.
