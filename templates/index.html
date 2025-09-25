@@ -351,6 +351,7 @@
         <div class="tabs">
             <button class="tab active" onclick="showTab('predictions')">🎯 Predictions</button>
             <button class="tab" onclick="showTab('analytics')">📊 Analytics</button>
+            <button class="tab" onclick="showTab('draw-analysis')">🔍 Draw Analysis</button>
             <button class="tab" onclick="showTab('history')">📝 History</button>
             <button class="tab" onclick="showTab('insights')">💡 Insights</button>
         </div>
@@ -373,6 +374,16 @@
                     📈 Pattern Analysis (Coming Soon)
                 </div>
             </div>
+
+            <div id="draw-analysis-tab" style="display: none;">
+                <h3>🔍 Historical Draw Analysis</h3>
+                <div id="draw-analysis-content">
+                <div class="filter-controls">
+            </div>
+                <div id="draw-results">
+            </div>
+       </div>
+   </div>
             
             <div id="history-tab" style="display: none;">
                 <h3>🕒 Prediction History</h3>
@@ -459,6 +470,41 @@
                 console.error('Error:', error);
             }
         }
+
+        async function loadDrawAnalysis(year, month) {
+            const resultsContainer = document.getElementById('draw-results');
+            resultsContainer.innerHTML = 'Loading historical data...';
+
+            try {
+               const url = `/api/draw_analysis?year=${year}&month=${month}`;
+               const response = await fetch(url);
+               const draws = await response.json();
+
+               resultsContainer.innerHTML = ''; // Clear loading message
+
+        if (draws.length === 0) {
+            resultsContainer.innerHTML = '<p>No draws found for this period.</p>';
+            return;
+        }
+
+        draws.forEach(draw => {
+            const drawCard = document.createElement('div');
+            drawCard.innerHTML = `
+                <h4>Draw Date: ${draw.date}</h4>
+                <p>Numbers: ${draw.white_balls.join(', ')} ⚡ ${draw.powerball}</p>
+                <p>First Half: ${draw.halves.first_half.join(', ')}</p>
+                <p>Second Half: ${draw.halves.second_half.join(', ')}</p>
+                <p>Last Digit Matches: ${draw.patterns.same_last_digit.map(p => p.join(',')).join('; ')}</p>
+                <p>Consecutive Numbers: ${draw.patterns.consecutive_pairs.map(p => p.join(',')).join('; ')}</p>
+            `;
+            resultsContainer.appendChild(drawCard);
+        });
+
+    } catch (error) {
+        resultsContainer.innerHTML = '<p>Error loading data.</p>';
+        console.error(error);
+    }
+}
         
         function createResultCard(modelName, modelData, analysisDepth) {
             const card = document.createElement('div');
