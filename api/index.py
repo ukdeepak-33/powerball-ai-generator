@@ -324,6 +324,24 @@ def generate_smart_numbers(historical_data):
 
     return sorted(selected_numbers), powerball
 
+def split_numbers_into_halves(numbers: List[int]) -> Dict[str, List[int]]:
+    """Separates numbers into two halves based on their decade group."""
+    halves = defaultdict(lambda: {'first_half': [], 'second_half': []})
+    for num in numbers:
+        decade = (num - 1) // 10
+        if num in range(decade*10 + 1, decade*10 + 6):
+            halves[decade]['first_half'].append(num)
+        elif num in range(decade*10 + 6, (decade + 1)*10 + 1):
+            halves[decade]['second_half'].append(num)
+
+    # Consolidate into final structure
+    final_halves = {'first_half': [], 'second_half': []}
+    for decade in sorted(halves.keys()):
+        final_halves['first_half'].extend(halves[decade]['first_half'])
+        final_halves['second_half'].extend(halves[decade]['second_half'])
+
+    return final_halves
+
 # --- Model Training and Prediction ---
 
 def create_prediction_features():
@@ -438,6 +456,48 @@ def read_root():
 def health_check():
     """Health check endpoint"""
     return {"status": "healthy", "message": "Powerball AI Generator is running"}
+
+@app.get("/api/draw_analysis")
+def get_draw_analysis(year: Optional[int] = None, month: Optional[int] = None):
+    """Returns historical draw analysis for a specific year and month."""
+    try:
+        # Step 1: Query the database
+        query = supabase.table(SUPABASE_TABLE_NAME).select('*')
+        if year:
+            start_date = f"{year}-01-01"
+            end_date = f"{year}-12-31"
+            query = query.gte('"Draw Date"', start_date).lte('"Draw Date"', end_date)
+        if month:
+            query = query.filter("EXTRACT(MONTH FROM \"Draw Date\")", 'eq', month)
+
+        draws = query.order('"Draw Date"', desc=True).execute().data
+        if not draws:
+            return JSONResponse({"message": "No data found for the selected period."}, status_code=404)
+
+        # Step 2: Process each draw to find patterns and splits
+        processed_draws = []
+        for draw in draws:
+            white_balls = [draw['Number 1'], draw['Number 2'], draw['Number 3'], draw['Number 4'], draw['Number 5']]
+
+            # New function for splitting into halves
+            halves = split_numbers_into_halves(white_balls)
+
+            # Existing pattern detection function
+            patterns = detect_number_patterns(white_balls)
+
+            processed_draws.append({
+                "date": draw["Draw Date"],
+                "white_balls": white_balls,
+                "powerball": draw["Powerball"],
+                "halves": halves,
+                "patterns": patterns
+            })
+
+        return JSONResponse(processed_draws)
+
+    except Exception as e:
+        traceback.print_exc()
+        return JSONResponse(status_code=500, content={"message": f"An unexpected error occurred: {str(e)}"})
 
 @app.get("/advanced_analytics")
 def get_advanced_analytics():
