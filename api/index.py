@@ -1,10 +1,11 @@
-# api/index.py
+# api/index.py - Updated with Individual 2025 Frequency Fix
 import pandas as pd
 import numpy as np
 import traceback
 import joblib
 import os
 import logging
+from datetime import datetime, timedelta
 from prometheus_client import Counter, Histogram
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
@@ -22,6 +23,10 @@ from sklearn.metrics import jaccard_score
 
 # Load environment variables
 load_dotenv()
+
+# Configure logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 # Initialize FastAPI app
 app = FastAPI(title="Powerball AI Generator", version="1.0.0")
@@ -62,7 +67,7 @@ def fetch_2025_draws() -> List[dict]:
                          .execute()
         return response.data
     except Exception as e:
-        print(f"Error fetching 2025 data: {e}")
+        logger.error(f"Error fetching 2025 data: {e}")
         return []
 
 def fetch_historical_draws(limit: int = 2000) -> List[dict]:
@@ -75,40 +80,155 @@ def fetch_historical_draws(limit: int = 2000) -> List[dict]:
                          .execute()
         return response.data
     except Exception as e:
-        print(f"Error fetching data from Supabase: {e}")
+        logger.error(f"Error fetching data from Supabase: {e}")
         return []
 
+def fetch_year_draws(year: int) -> List[dict]:
+    """Fetches draws for a specific year"""
+    try:
+        response = supabase.table(SUPABASE_TABLE_NAME) \
+                         .select('*') \
+                         .gte('"Draw Date"', f'{year}-01-01') \
+                         .lte('"Draw Date"', f'{year}-12-31') \
+                         .order('"Draw Date"', desc=True) \
+                         .execute()
+        return response.data
+    except Exception as e:
+        logger.error(f"Error fetching {year} data: {e}")
+        return []
+
+def get_current_year_number_frequencies(year: int = 2025) -> Dict[int, int]:
+    """Get frequency count for all numbers 1-69 in the specified year"""
+    try:
+        year_data = fetch_year_draws(year)
+        if not year_data:
+            return {i: 0 for i in range(1, 70)}
+        
+        df = pd.DataFrame(year_data)
+        number_columns = ['Number 1', 'Number 2', 'Number 3', 'Number 4', 'Number 5']
+        
+        # Count frequency of each number 1-69
+        frequency_counts = {i: 0 for i in range(1, 70)}
+        
+        for _, draw in df.iterrows():
+            for col in number_columns:
+                number = int(draw[col])
+                if 1 <= number <= 69:
+                    frequency_counts[number] += 1
+        
+        return frequency_counts
+        
+    except Exception as e:
+        logger.error(f"Error getting {year} frequencies: {e}")
+        return {i: 0 for i in range(1, 70)}
+
 def get_2025_frequencies(white_balls, powerball, historical_data):
-    """Get frequency counts for numbers in 2025 only"""
+    """Get INDIVIDUAL frequency counts for numbers in 2025 only - FIXED VERSION"""
     if not historical_data:
         return {
             'white_ball_counts': {int(num): 0 for num in white_balls},
             'powerball_count': 0,
-            'total_2025_draws': 0
+            'total_2025_draws': 0,
+            'individual_frequencies': {int(num): 0 for num in white_balls},
+            'individual_percentages': {int(num): 0.0 for num in white_balls}
         }
 
     df = pd.DataFrame(historical_data)
     number_columns = ['Number 1', 'Number 2', 'Number 3', 'Number 4', 'Number 5']
 
-    white_ball_counts = {}
-    all_white_balls = []
-    for _, draw in df.iterrows():
-        all_white_balls.extend([draw[col] for col in number_columns])
-
-    white_ball_counter = Counter(all_white_balls)
+    # Calculate individual frequencies for each white ball number
+    individual_frequencies = {}
+    individual_percentages = {}
+    total_draws = len(df)
+    
+    # Count how many times each specific number appeared in 2025
     for num in white_balls:
         python_num = int(num)
-        white_ball_counts[python_num] = white_ball_counter.get(python_num, 0)
+        count = 0
+        
+        # Check each draw in 2025 data
+        for _, draw in df.iterrows():
+            draw_numbers = [draw[col] for col in number_columns]
+            if python_num in draw_numbers:
+                count += 1
+        
+        individual_frequencies[python_num] = count
+        individual_percentages[python_num] = round((count / total_draws) * 100, 1) if total_draws > 0 else 0.0
 
+    # Calculate powerball frequency for 2025
     powerball_counts = Counter(df['Powerball'])
     python_powerball = int(powerball)
     powerball_count = powerball_counts.get(python_powerball, 0)
+    powerball_percentage = round((powerball_count / total_draws) * 100, 1) if total_draws > 0 else 0.0
 
     return {
-        'white_ball_counts': white_ball_counts,
+        'white_ball_counts': individual_frequencies,  # Use individual frequencies
         'powerball_count': powerball_count,
-        'total_2025_draws': len(df)
+        'total_2025_draws': total_draws,
+        'individual_frequencies': individual_frequencies,
+        'individual_percentages': individual_percentages,
+        'powerball_percentage': powerball_percentage,
+        'year': '2025'
     }
+
+def get_enhanced_frequency_analysis(white_balls, powerball, year: int = 2025):
+    """Get enhanced frequency analysis showing individual frequencies for the year"""
+    try:
+        # Get all number frequencies for the year
+        all_frequencies = get_current_year_number_frequencies(year)
+        
+        # Get specific data for the year
+        historical_data_year = fetch_year_draws(year)
+        
+        # Calculate statistics
+        total_draws = len(historical_data_year) if historical_data_year else 0
+        
+        # Individual frequencies for selected numbers
+        selected_frequencies = {}
+        for num in white_balls:
+            selected_frequencies[int(num)] = all_frequencies.get(int(num), 0)
+        
+        # Powerball frequency
+        powerball_frequency = 0
+        if historical_data_year:
+            df = pd.DataFrame(historical_data_year)
+            powerball_counts = Counter(df['Powerball'])
+            powerball_frequency = powerball_counts.get(int(powerball), 0)
+        
+        # Calculate percentages
+        selected_percentages = {}
+        if total_draws > 0:
+            for num, freq in selected_frequencies.items():
+                selected_percentages[num] = round((freq / total_draws) * 100, 1)
+        
+        # Find hot and cold numbers
+        sorted_frequencies = sorted(all_frequencies.items(), key=lambda x: x[1], reverse=True)
+        hot_numbers = [num for num, freq in sorted_frequencies[:10]]  # Top 10
+        cold_numbers = [num for num, freq in sorted_frequencies[-10:]]  # Bottom 10
+        
+        return {
+            'individual_frequencies': selected_frequencies,
+            'individual_percentages': selected_percentages,
+            'powerball_frequency': powerball_frequency,
+            'powerball_percentage': round((powerball_frequency / total_draws) * 100, 1) if total_draws > 0 else 0,
+            'total_draws': total_draws,
+            'year': year,
+            'hot_numbers': hot_numbers,
+            'cold_numbers': cold_numbers,
+            'average_frequency': sum(all_frequencies.values()) / 69 / total_draws * 100 if total_draws > 0 else 0
+        }
+        
+    except Exception as e:
+        logger.error(f"Error in enhanced frequency analysis: {e}")
+        return {
+            'individual_frequencies': {int(num): 0 for num in white_balls},
+            'individual_percentages': {int(num): 0 for num in white_balls},
+            'powerball_frequency': 0,
+            'powerball_percentage': 0,
+            'total_draws': 0,
+            'year': year,
+            'error': str(e)
+        }
 
 def detect_number_patterns(white_balls: List[int]) -> Dict[str, Any]:
     """Detect various patterns in the generated numbers"""
@@ -209,33 +329,12 @@ def analyze_pattern_history(patterns: Dict[str, Any], historical_data: List[dict
                             history_info['current_year_count'] += 1
 
                 except Exception as e:
-                    print(f"Error analyzing pattern {pattern_type}: {pattern}, error: {e}")
+                    logger.error(f"Error analyzing pattern {pattern_type}: {pattern}, error: {e}")
                     continue
 
             pattern_history[pattern_type].append(history_info)
 
     return pattern_history
-
-def create_advanced_features(historical_data):
-    """Create more sophisticated features for better predictions"""
-    features = {
-        # Time-based features
-        'day_of_week': [],
-        'month': [],
-        'days_since_last_draw': [],
-        
-        # Number pattern features
-        'sum_of_numbers': [],
-        'number_spread': [],
-        'hot_numbers_count': [],
-        'cold_numbers_count': [],
-        
-        # Sequence features
-        'consecutive_count': [],
-        'gap_analysis': [],
-        'decade_distribution': []
-    }
-    # Implementation details...
 
 def format_pattern_analysis(pattern_history: Dict[str, Any]) -> str:
     """Format pattern analysis for display"""
@@ -327,10 +426,7 @@ def generate_smart_numbers(historical_data):
 # --- Model Training and Prediction ---
 
 def create_prediction_features():
-    """
-    Creates a single feature matrix (X) for prediction.
-    This is a row vector of zeros and ones to represent the numbers.
-    """
+    """Creates a single feature matrix (X) for prediction."""
     feature_dict = {f'num_{i}': 0 for i in range(1, 70)}
     X = pd.DataFrame([feature_dict])
     return X
@@ -343,41 +439,45 @@ performance_log = {
 }
 
 def ensemble_prediction(rf_model, gb_model, knn_model):
-    """
-    Get predictions from all three models and combine them using a simple voting ensemble.
-    """
-    print("🧠 Using ensemble model for prediction...")
+    """Get predictions from all three models and combine them using a simple voting ensemble."""
+    logger.info("🧠 Using ensemble model for prediction...")
 
-    # Get probabilities from Random Forest
-    rf_probabilities_list = rf_model.predict_proba(create_prediction_features())
-    rf_probs = np.array([prob[0, 1] for prob in rf_probabilities_list])
+    try:
+        # Get probabilities from Random Forest
+        rf_probabilities_list = rf_model.predict_proba(create_prediction_features())
+        rf_probs = np.array([prob[0, 1] if len(prob[0]) > 1 else prob[0, 0] for prob in rf_probabilities_list])
 
-    # Get probabilities from Gradient Boosting
-    gb_probabilities_list = gb_model.predict_proba(create_prediction_features())
-    gb_probs = np.array([prob[0, 1] for prob in gb_probabilities_list])
+        # Get probabilities from Gradient Boosting
+        gb_probabilities_list = gb_model.predict_proba(create_prediction_features())
+        gb_probs = np.array([prob[0, 1] if len(prob[0]) > 1 else prob[0, 0] for prob in gb_probabilities_list])
 
-    # Get probabilities from KNN
-    knn_probabilities_list = knn_model.predict_proba(create_prediction_features())
-    knn_probs = np.array([prob[0, 1] for prob in knn_probabilities_list])
+        # Get probabilities from KNN
+        knn_probabilities_list = knn_model.predict_proba(create_prediction_features())
+        knn_probs = np.array([prob[0, 1] if len(prob[0]) > 1 else prob[0, 0] for prob in knn_probabilities_list])
 
-    # Average the probabilities from all three models
-    combined_probs = (rf_probs + gb_probs + knn_probs) / 3
+        # Average the probabilities from all three models
+        combined_probs = (rf_probs + gb_probs + knn_probs) / 3
 
-    # Normalize probabilities to sum to 1
-    total_prob = combined_probs.sum()
-    if total_prob == 0:
-        normalized_probs = np.full(69, 1/69)
-    else:
-        normalized_probs = combined_probs / total_prob
+        # Normalize probabilities to sum to 1
+        total_prob = combined_probs.sum()
+        if total_prob == 0:
+            normalized_probs = np.full(69, 1/69)
+        else:
+            normalized_probs = combined_probs / total_prob
 
-    # Select 5 numbers based on the combined probability distribution
-    numbers = list(range(1, 70))
-    final_white_balls = np.random.choice(numbers, size=5, p=normalized_probs, replace=False)
+        # Select 5 numbers based on the combined probability distribution
+        numbers = list(range(1, 70))
+        final_white_balls = np.random.choice(numbers, size=5, p=normalized_probs, replace=False)
 
-    # Predict the Powerball randomly
-    final_powerball = np.random.randint(1, 27)
+        # Predict the Powerball randomly
+        final_powerball = np.random.randint(1, 27)
 
-    return sorted(final_white_balls), final_powerball
+        return sorted(final_white_balls), final_powerball
+
+    except Exception as e:
+        logger.error(f"Ensemble prediction failed: {e}")
+        historical_data = fetch_historical_draws(limit=2000)
+        return generate_smart_numbers(historical_data)
 
 def get_predictions(model):
     """Get predictions for white balls and powerball from a single model."""
@@ -394,7 +494,7 @@ def get_predictions(model):
         probabilities_list = model.predict_proba(features)
 
         # Reshape probabilities to a single array
-        high_freq_probs = np.array([prob[0, 1] for prob in probabilities_list])
+        high_freq_probs = np.array([prob[0, 1] if len(prob[0]) > 1 else prob[0, 0] for prob in probabilities_list])
 
         # Normalize probabilities to sum to 1
         total_prob = high_freq_probs.sum()
@@ -414,36 +514,84 @@ def get_predictions(model):
         return sorted(selected_numbers), powerball
 
     except Exception as e:
-        print(f"❌ Prediction failed for a model: {e}, using fallback")
+        logger.error(f"❌ Prediction failed for a model: {e}, using fallback")
         historical_data = fetch_historical_draws(limit=2000)
         return generate_smart_numbers(historical_data)
 
 def split_numbers_into_halves(numbers: List[int]) -> Dict[str, List[int]]:
-    """Separates numbers into two halves based on their decade group (1-5, 6-10, 11-15, 16-20, etc.)."""
+    """Separates numbers into two halves based on their decade group"""
     final_halves = {'first_half': [], 'second_half': []}
     
-    # Sort the numbers to process them cleanly
     sorted_numbers = sorted(numbers)
     
     for num in sorted_numbers:
-        # Determine the start of the decade (1, 11, 21, 31, etc.)
         decade_start = (num - 1) // 10 * 10 + 1 
         
-        # Numbers 1 through 5 of the decade belong to the first half
         if num in range(decade_start, decade_start + 5):
             final_halves['first_half'].append(num)
-        # Numbers 6 through 10 (or 9 for the last group) belong to the second half
-        else: # num in range(decade_start + 5, decade_start + 10) or decade_start=61, num in 66-69
+        else:
             final_halves['second_half'].append(num)
             
     return final_halves
+
+# UPDATED analyze_prediction function with individual frequency fix
+def analyze_prediction(white_balls, powerball, historical_data_all, historical_data_2025):
+    """Helper function to perform analysis with INDIVIDUAL 2025 frequencies"""
+    
+    # Get enhanced frequency analysis for 2025
+    frequency_2025 = get_enhanced_frequency_analysis(white_balls, powerball, 2025)
+    
+    patterns = detect_number_patterns(white_balls)
+    pattern_analysis = analyze_pattern_history(patterns, historical_data_all)
+    formatted_patterns = format_pattern_analysis(pattern_analysis)
+    
+    group_a_count = sum(1 for num in white_balls if num in GROUP_A_NUMBERS)
+    odd_count = sum(1 for num in white_balls if num % 2 == 1)
+    even_count = 5 - odd_count
+    odd_even_ratio = f"{odd_count}-{even_count}"
+    
+    # Create detailed frequency message with INDIVIDUAL frequencies
+    frequency_details = []
+    for num in white_balls:
+        freq = frequency_2025['individual_frequencies'].get(int(num), 0)
+        pct = frequency_2025['individual_percentages'].get(int(num), 0)
+        frequency_details.append(f"#{num}: {freq} times ({pct}%)")
+    
+    frequency_message = f"2025 Individual Frequencies: {' | '.join(frequency_details)}"
+    
+    powerball_freq = frequency_2025['powerball_frequency']
+    powerball_pct = frequency_2025['powerball_percentage']
+    powerball_message = f"Powerball #{powerball}: {powerball_freq} times ({powerball_pct}%)"
+    
+    analysis_message = f"{frequency_message}\n{powerball_message}\n\nPattern Analysis:\n{formatted_patterns}"
+    
+    return {
+        "generated_numbers": {
+            "white_balls": white_balls,
+            "powerball": powerball,
+            "lucky_group_a_numbers": list(GROUP_A_NUMBERS.intersection(set(white_balls)))
+        },
+        "analysis": {
+            "group_a_count": group_a_count,
+            "odd_even_ratio": odd_even_ratio,
+            "message": analysis_message,
+            "2025_frequency": frequency_2025,
+            "frequency_breakdown": {
+                "individual_white_balls": frequency_2025['individual_frequencies'],
+                "individual_percentages": frequency_2025['individual_percentages'],
+                "powerball_frequency": powerball_freq,
+                "powerball_percentage": powerball_pct,
+                "total_2025_draws": frequency_2025['total_draws']
+            }
+        }
+    }
+
+# API Endpoints
 
 @app.get("/")
 def read_root():
     """Returns the main HTML page"""
     try:
-        # Get the path to the current file (index.py)
-        # Then navigate up one directory and into the 'templates' folder
         file_path = Path(__file__).parent.parent / "templates" / "index.html"
         
         with open(file_path, "r") as f:
@@ -456,8 +604,17 @@ def read_root():
 
 @app.get("/health")
 def health_check():
-    """Health check endpoint"""
-    return {"status": "healthy", "message": "Powerball AI Generator is running"}
+    """Health check endpoint with model status"""
+    model_status = {}
+    for name, model in models.items():
+        model_status[name] = "loaded" if model is not None else "not_loaded"
+    
+    return {
+        "status": "healthy", 
+        "message": "Powerball AI Generator is running",
+        "models": model_status,
+        "frequency_fix": "Individual 2025 frequencies enabled"
+    }
 
 @app.get("/advanced_analytics")
 def get_advanced_analytics():
@@ -520,6 +677,106 @@ def get_historical_analysis(request: Request):
         traceback.print_exc()
         return JSONResponse(status_code=500, content={"message": f"An unexpected error occurred: {str(e)}"})
 
+# NEW ENDPOINTS for frequency analysis
+
+@app.get("/frequency_analysis/{year}")
+def get_frequency_analysis(year: int):
+    """Get detailed frequency analysis for a specific year"""
+    try:
+        all_frequencies = get_current_year_number_frequencies(year)
+        year_data = fetch_year_draws(year)
+        total_draws = len(year_data)
+        
+        # Calculate percentages and statistics
+        frequency_stats = {}
+        for num in range(1, 70):
+            freq = all_frequencies[num]
+            percentage = round((freq / total_draws) * 100, 1) if total_draws > 0 else 0
+            frequency_stats[num] = {
+                'frequency': freq,
+                'percentage': percentage,
+                'expected_frequency': round(total_draws / 69, 1) if total_draws > 0 else 0,
+                'deviation': round(freq - (total_draws / 69), 1) if total_draws > 0 else 0
+            }
+        
+        # Get powerball frequencies
+        powerball_frequencies = {}
+        if year_data:
+            df = pd.DataFrame(year_data)
+            pb_counts = Counter(df['Powerball'])
+            for pb in range(1, 27):
+                freq = pb_counts.get(pb, 0)
+                powerball_frequencies[pb] = {
+                    'frequency': freq,
+                    'percentage': round((freq / total_draws) * 100, 1) if total_draws > 0 else 0
+                }
+        
+        # Sort by frequency
+        sorted_white_balls = sorted(frequency_stats.items(), key=lambda x: x[1]['frequency'], reverse=True)
+        sorted_powerballs = sorted(powerball_frequencies.items(), key=lambda x: x[1]['frequency'], reverse=True) if powerball_frequencies else []
+        
+        return JSONResponse({
+            'year': year,
+            'total_draws': total_draws,
+            'white_ball_frequencies': frequency_stats,
+            'powerball_frequencies': powerball_frequencies,
+            'top_10_white_balls': dict(sorted_white_balls[:10]),
+            'bottom_10_white_balls': dict(sorted_white_balls[-10:]),
+            'top_5_powerballs': dict(sorted_powerballs[:5]) if sorted_powerballs else {},
+            'bottom_5_powerballs': dict(sorted_powerballs[-5:]) if sorted_powerballs else {},
+            'statistics': {
+                'average_white_ball_frequency': round(sum(f['frequency'] for f in frequency_stats.values()) / 69, 1),
+                'average_powerball_frequency': round(sum(f['frequency'] for f in powerball_frequencies.values()) / 26, 1) if powerball_frequencies else 0,
+                'most_frequent_white_ball': sorted_white_balls[0][0] if sorted_white_balls else None,
+                'least_frequent_white_ball': sorted_white_balls[-1][0] if sorted_white_balls else None,
+                'most_frequent_powerball': sorted_powerballs[0][0] if sorted_powerballs else None,
+                'least_frequent_powerball': sorted_powerballs[-1][0] if sorted_powerballs else None
+            }
+        })
+        
+    except Exception as e:
+        return JSONResponse(
+            status_code=500,
+            content={"error": f"Failed to get frequency analysis: {str(e)}"}
+        )
+
+@app.get("/current_year_stats")
+def get_current_year_stats():
+    """Get quick frequency stats for 2025"""
+    try:
+        year_data = fetch_year_draws(2025)
+        if not year_data:
+            return JSONResponse({"message": "No 2025 data available yet"})
+        
+        df = pd.DataFrame(year_data)
+        total_draws = len(df)
+        
+        # Get all number frequencies
+        all_frequencies = get_current_year_number_frequencies(2025)
+        
+        # Find most and least frequent
+        sorted_frequencies = sorted(all_frequencies.items(), key=lambda x: x[1], reverse=True)
+        
+        # Get powerball frequencies
+        pb_counts = Counter(df['Powerball'])
+        sorted_pb = sorted(pb_counts.items(), key=lambda x: x[1], reverse=True)
+        
+        return JSONResponse({
+            'year': 2025,
+            'total_draws': total_draws,
+            'most_frequent_numbers': sorted_frequencies[:10],
+            'least_frequent_numbers': sorted_frequencies[-10:],
+            'most_frequent_powerballs': sorted_pb[:5],
+            'least_frequent_powerballs': sorted_pb[-5:],
+            'last_updated': df.iloc[0]['Draw Date'] if not df.empty else None
+        })
+        
+    except Exception as e:
+        return JSONResponse(
+            status_code=500,
+            content={"error": f"Failed to get current year stats: {str(e)}"}
+        )
+
 # Global variable to hold models
 models = {}
 
@@ -535,48 +792,21 @@ def load_models():
         if os.path.exists(file_path):
             try:
                 models[name] = joblib.load(file_path)
-                print(f"✅ Successfully loaded {name} model.")
+                logger.info(f"✅ Successfully loaded {name} model.")
             except Exception as e:
-                print(f"❌ Error loading {name} model: {e}")
+                logger.error(f"❌ Error loading {name} model: {e}")
                 models[name] = None
         else:
-            print(f"⚠️ Warning: {file_path} not found. Skipping {name} model.")
+            logger.info(f"⚠️ Warning: {file_path} not found. Skipping {name} model.")
             models[name] = None
 
 # Load models at startup
 load_models()
 
-def analyze_prediction(white_balls, powerball, historical_data_all, historical_data_2025):
-    """Helper function to perform analysis on a given set of numbers."""
-    frequency_2025 = get_2025_frequencies(white_balls, powerball, historical_data_2025)
-    patterns = detect_number_patterns(white_balls)
-    pattern_analysis = analyze_pattern_history(patterns, historical_data_all)
-    formatted_patterns = format_pattern_analysis(pattern_analysis)
-    group_a_count = sum(1 for num in white_balls if num in GROUP_A_NUMBERS)
-    odd_count = sum(1 for num in white_balls if num % 2 == 1)
-    even_count = 5 - odd_count
-    odd_even_ratio = f"{odd_count}-{even_count}"
-    analysis_message = "Your numbers match the following historical patterns:\n" + formatted_patterns
-    return {
-        "generated_numbers": {
-            "white_balls": white_balls,
-            "powerball": powerball,
-            "lucky_group_a_numbers": list(GROUP_A_NUMBERS.intersection(set(white_balls)))
-        },
-        "analysis": {
-            "group_a_count": group_a_count,
-            "odd_even_ratio": odd_even_ratio,
-            "message": analysis_message,
-            "2025_frequency": frequency_2025,
-        }
-    }
-
 @app.get("/generate")
 @app.get("/generate_all")
 def generate_numbers(request: Request):
-    """
-    Generates a set of Powerball numbers from each model and the ensemble for comparison.
-    """
+    """Generates a set of Powerball numbers from each model and the ensemble with INDIVIDUAL 2025 frequencies"""
     try:
         historical_data_2025 = fetch_2025_draws()
         historical_data_all = fetch_historical_draws(limit=2000)
@@ -609,7 +839,15 @@ def generate_numbers(request: Request):
             fallback_balls, fallback_pb = generate_smart_numbers(historical_data_all)
             predictions['fallback'] = analyze_prediction(fallback_balls, fallback_pb, historical_data_all, historical_data_2025)
 
-        # FIX: Convert numpy types to native Python types before returning
+        # Add metadata about the frequency fix
+        for model_name in predictions:
+            predictions[model_name]['model_info'] = {
+                'frequency_calculation': 'Individual 2025 frequencies',
+                'data_source': '2025 draws only',
+                'fix_applied': True
+            }
+        
+        # Convert numpy types to native Python types before returning
         sanitized_predictions = convert_numpy_types(predictions)
         
         return JSONResponse(sanitized_predictions)
@@ -643,15 +881,12 @@ def get_draw_analysis(year: Optional[int] = None, month: Optional[int] = None):
             
         # 2. Apply Month Filter (if provided)
         if month:
-            # Note: Supabase's REST API doesn't directly support EXTRACT(MONTH) in this simple form.
-            # A correct implementation would require a custom view or function on the database.
-            # For simplicity, we will fetch the data and filter in Python.
             pass # We will filter by month after fetching the year's data.
 
         # 3. Order by date descending (most recent first)
         draws = query.order('"Draw Date"', desc=True).execute().data
         
-        # --- Python-side Month Filtering (Safer than relying on Supabase REST API date functions) ---
+        # --- Python-side Month Filtering ---
         if month:
             draws = [
                 draw for draw in draws 
@@ -690,7 +925,6 @@ def get_draw_analysis(year: Optional[int] = None, month: Optional[int] = None):
     except Exception as e:
         traceback.print_exc()
         return JSONResponse(status_code=500, content={"message": f"An unexpected error occurred: {str(e)}"})
-
 
 # For running the app
 if __name__ == "__main__":
