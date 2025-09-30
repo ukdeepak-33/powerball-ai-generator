@@ -926,6 +926,137 @@ def get_draw_analysis(year: Optional[int] = None, month: Optional[int] = None):
         traceback.print_exc()
         return JSONResponse(status_code=500, content={"message": f"An unexpected error occurred: {str(e)}"})
 
+@app.get("/current_year_stats")
+def get_current_year_stats():
+    """Get detailed frequency stats for 2025 with grouped display"""
+    try:
+        year_data = fetch_year_draws(2025)
+        if not year_data:
+            return JSONResponse({"message": "No 2025 data available yet"})
+        
+        df = pd.DataFrame(year_data)
+        total_draws = len(df)
+        
+        # Get all number frequencies
+        all_frequencies = get_current_year_number_frequencies(2025)
+        
+        # Group numbers by frequency
+        frequency_groups = {}
+        for num, freq in all_frequencies.items():
+            if freq not in frequency_groups:
+                frequency_groups[freq] = []
+            frequency_groups[freq].append(num)
+        
+        # Sort frequency groups
+        sorted_frequency_groups = dict(sorted(frequency_groups.items(), key=lambda x: x[0], reverse=True))
+        
+        # Calculate percentages for each number
+        number_details = {}
+        for num, freq in all_frequencies.items():
+            percentage = round((freq / total_draws) * 100, 1) if total_draws > 0 else 0
+            number_details[num] = {
+                'frequency': freq,
+                'percentage': percentage,
+                'is_group_a': num in GROUP_A_NUMBERS
+            }
+        
+        # Get powerball frequencies
+        pb_counts = Counter(df['Powerball'])
+        powerball_details = {}
+        for pb in range(1, 27):
+            freq = pb_counts.get(pb, 0)
+            powerball_details[pb] = {
+                'frequency': freq,
+                'percentage': round((freq / total_draws) * 100, 1) if total_draws > 0 else 0
+            }
+        
+        return JSONResponse({
+            'year': 2025,
+            'total_draws': total_draws,
+            'number_details': number_details,
+            'frequency_groups': sorted_frequency_groups,
+            'powerball_details': powerball_details,
+            'last_updated': df.iloc[0]['Draw Date'] if not df.empty else None
+        })
+        
+    except Exception as e:
+        return JSONResponse(
+            status_code=500,
+            content={"error": f"Failed to get current year stats: {str(e)}"}
+        )
+
+@app.get("/group_a_analysis")
+def get_group_a_analysis(start_year: int = 2017, end_year: Optional[int] = None):
+    """Analyze Group A numbers by year from 2017 to current"""
+    try:
+        if end_year is None:
+            end_year = datetime.now().year
+        
+        analysis_by_year = {}
+        
+        for year in range(start_year, end_year + 1):
+            year_data = fetch_year_draws(year)
+            if not year_data:
+                continue
+            
+            df = pd.DataFrame(year_data)
+            number_columns = ['Number 1', 'Number 2', 'Number 3', 'Number 4', 'Number 5']
+            
+            # Count Group A occurrences per draw
+            group_a_distribution = {5: 0, 4: 0, 3: 0, 2: 0, 1: 0, 0: 0}
+            
+            for _, draw in df.iterrows():
+                draw_numbers = [draw[col] for col in number_columns]
+                group_a_count = sum(1 for num in draw_numbers if num in GROUP_A_NUMBERS)
+                group_a_distribution[group_a_count] += 1
+            
+            total_draws = len(df)
+            
+            # Calculate percentages
+            group_a_percentages = {}
+            for count, occurrences in group_a_distribution.items():
+                percentage = round((occurrences / total_draws) * 100, 1) if total_draws > 0 else 0
+                group_a_percentages[count] = percentage
+            
+            analysis_by_year[year] = {
+                'total_draws': total_draws,
+                'distribution': group_a_distribution,
+                'percentages': group_a_percentages,
+                'most_common': max(group_a_distribution.items(), key=lambda x: x[1])[0]
+            }
+        
+        # Calculate overall statistics
+        overall_distribution = {5: 0, 4: 0, 3: 0, 2: 0, 1: 0, 0: 0}
+        total_draws_all_years = 0
+        
+        for year_stats in analysis_by_year.values():
+            for count, occurrences in year_stats['distribution'].items():
+                overall_distribution[count] += occurrences
+            total_draws_all_years += year_stats['total_draws']
+        
+        overall_percentages = {}
+        for count, occurrences in overall_distribution.items():
+            percentage = round((occurrences / total_draws_all_years) * 100, 1) if total_draws_all_years > 0 else 0
+            overall_percentages[count] = percentage
+        
+        return JSONResponse({
+            'start_year': start_year,
+            'end_year': end_year,
+            'analysis_by_year': analysis_by_year,
+            'overall_statistics': {
+                'total_draws': total_draws_all_years,
+                'distribution': overall_distribution,
+                'percentages': overall_percentages
+            },
+            'group_a_numbers': list(GROUP_A_NUMBERS)
+        })
+        
+    except Exception as e:
+        return JSONResponse(
+            status_code=500,
+            content={"error": f"Failed to get Group A analysis: {str(e)}"}
+        )
+
 # For running the app
 if __name__ == "__main__":
     import uvicorn
