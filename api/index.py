@@ -932,7 +932,16 @@ def get_current_year_stats():
     try:
         year_data = fetch_year_draws(2025)
         if not year_data:
-            return JSONResponse({"message": "No 2025 data available yet"})
+            return JSONResponse({
+                "error": None,
+                "message": "No 2025 data available yet",
+                "year": 2025,
+                "total_draws": 0,
+                "number_details": {},
+                "frequency_groups": {},
+                "powerball_details": {},
+                "last_updated": None
+            })
         
         df = pd.DataFrame(year_data)
         total_draws = len(df)
@@ -980,9 +989,19 @@ def get_current_year_stats():
         })
         
     except Exception as e:
+        logger.error(f"Error in get_current_year_stats: {str(e)}")
+        logger.error(traceback.format_exc())
         return JSONResponse(
             status_code=500,
-            content={"error": f"Failed to get current year stats: {str(e)}"}
+            content={
+                "error": f"Failed to get current year stats: {str(e)}",
+                "year": 2025,
+                "total_draws": 0,
+                "number_details": {},
+                "frequency_groups": {},
+                "powerball_details": {},
+                "last_updated": None
+            }
         )
 
 @app.get("/group_a_analysis")
