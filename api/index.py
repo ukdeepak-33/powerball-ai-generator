@@ -931,7 +931,7 @@ def get_current_year_stats():
     """Get detailed frequency stats for 2025 with grouped display"""
     try:
         year_data = fetch_year_draws(2025)
-        if not year_data:
+        if not year_data or len(year_data) == 0:
             return JSONResponse({
                 "error": None,
                 "message": "No 2025 data available yet",
@@ -945,28 +945,42 @@ def get_current_year_stats():
         
         df = pd.DataFrame(year_data)
         total_draws = len(df)
+        number_columns = ['Number 1', 'Number 2', 'Number 3', 'Number 4', 'Number 5']
         
-        # Get all number frequencies
-        all_frequencies = get_current_year_number_frequencies(2025)
+        # Calculate frequencies directly
+        frequency_counts = {}
+        for i in range(1, 70):
+            frequency_counts[i] = 0
+        
+        # Count each number's occurrences
+        for _, draw in df.iterrows():
+            for col in number_columns:
+                try:
+                    number = int(draw[col])
+                    if 1 <= number <= 69:
+                        frequency_counts[number] += 1
+                except (ValueError, TypeError, KeyError) as e:
+                    logger.warning(f"Error processing number in column {col}: {e}")
+                    continue
         
         # Group numbers by frequency
         frequency_groups = {}
-        for num, freq in all_frequencies.items():
+        for num, freq in frequency_counts.items():
             if freq not in frequency_groups:
                 frequency_groups[freq] = []
             frequency_groups[freq].append(num)
         
-        # Sort frequency groups
+        # Sort frequency groups (highest frequency first)
         sorted_frequency_groups = dict(sorted(frequency_groups.items(), key=lambda x: x[0], reverse=True))
         
         # Calculate percentages for each number
         number_details = {}
-        for num, freq in all_frequencies.items():
+        for num, freq in frequency_counts.items():
             percentage = round((freq / total_draws) * 100, 1) if total_draws > 0 else 0
             number_details[num] = {
-                'frequency': freq,
-                'percentage': percentage,
-                'is_group_a': num in GROUP_A_NUMBERS
+                'frequency': int(freq),
+                'percentage': float(percentage),
+                'is_group_a': bool(num in GROUP_A_NUMBERS)
             }
         
         # Get powerball frequencies
@@ -975,18 +989,23 @@ def get_current_year_stats():
         for pb in range(1, 27):
             freq = pb_counts.get(pb, 0)
             powerball_details[pb] = {
-                'frequency': freq,
+                'frequency': int(freq),
                 'percentage': round((freq / total_draws) * 100, 1) if total_draws > 0 else 0
             }
         
-        return JSONResponse({
+        result = {
             'year': 2025,
-            'total_draws': total_draws,
+            'total_draws': int(total_draws),
             'number_details': number_details,
             'frequency_groups': sorted_frequency_groups,
             'powerball_details': powerball_details,
-            'last_updated': df.iloc[0]['Draw Date'] if not df.empty else None
-        })
+            'last_updated': str(df.iloc[0]['Draw Date']) if not df.empty else None
+        }
+        
+        logger.info(f"Successfully calculated stats for {total_draws} draws")
+        logger.info(f"Number details count: {len(number_details)}")
+        
+        return JSONResponse(result)
         
     except Exception as e:
         logger.error(f"Error in get_current_year_stats: {str(e)}")
