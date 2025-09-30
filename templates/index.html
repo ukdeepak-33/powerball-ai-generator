@@ -733,10 +733,39 @@
             
             try {
                 const response = await fetch('/current_year_stats');
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                }
+                
                 const data = await response.json();
                 
+                console.log('Frequency data received:', data);
+                
                 if (data.error) {
-                    statsContainer.innerHTML = `<p>Error: ${data.error}</p>`;
+                    statsContainer.innerHTML = `
+                        <div class="error-message">
+                            <strong>Error:</strong> ${data.error}<br>
+                            <p style="margin-top: 10px;">This could mean:</p>
+                            <ul style="text-align: left; margin: 10px 0;">
+                                <li>No 2025 data is available in the database yet</li>
+                                <li>Database connection issue</li>
+                                <li>API endpoint needs verification</li>
+                            </ul>
+                            <button class="btn btn-secondary" onclick="testAPI()" style="margin-top: 10px;">Test API Connection</button>
+                        </div>
+                    `;
+                    return;
+                }
+                
+                if (!data.number_details || Object.keys(data.number_details).length === 0) {
+                    statsContainer.innerHTML = `
+                        <div style="background: #fff3cd; padding: 20px; border-radius: 10px; margin-top: 20px;">
+                            <h4>⚠️ No Data Available</h4>
+                            <p>There is no 2025 data available yet. The database may not have any draws for 2025.</p>
+                            <p style="margin-top: 10px;"><strong>Total Draws:</strong> ${data.total_draws || 0}</p>
+                        </div>
+                    `;
                     return;
                 }
                 
@@ -744,17 +773,40 @@
                 updateFrequencyDisplay();
                 
             } catch (error) {
-                statsContainer.innerHTML = `<p>Error loading stats: ${error.message}</p>`;
+                console.error('Error loading frequency analysis:', error);
+                statsContainer.innerHTML = `
+                    <div class="error-message">
+                        <strong>Error loading stats:</strong><br>
+                        ${error.message}<br><br>
+                        <button class="btn btn-secondary" onclick="loadFrequencyAnalysis()">Retry</button>
+                        <button class="btn btn-secondary" onclick="testAPI()">Test API</button>
+                    </div>
+                `;
             }
         }
         
         function updateFrequencyDisplay() {
-            if (!currentFrequencyData) return;
+            if (!currentFrequencyData) {
+                console.error('No frequency data available');
+                return;
+            }
             
             const statsContainer = document.getElementById('frequency-stats');
-            const sortBy = document.getElementById('frequencySort').value;
-            const filterBy = document.getElementById('frequencyFilter').value;
+            const sortBy = document.getElementById('frequencySort')?.value || 'frequency_desc';
+            const filterBy = document.getElementById('frequencyFilter')?.value || 'all';
             const data = currentFrequencyData;
+            
+            // Validate data structure
+            if (!data.number_details || typeof data.number_details !== 'object') {
+                statsContainer.innerHTML = `
+                    <div class="error-message">
+                        Invalid data structure received from API. 
+                        <button class="btn btn-secondary" onclick="loadFrequencyAnalysis()">Retry</button>
+                    </div>
+                `;
+                console.error('Invalid data structure:', data);
+                return;
+            }
             
             // Filter and sort numbers
             let numbersArray = Object.entries(data.number_details).map(([num, details]) => ({
@@ -794,7 +846,7 @@
                     <h4>📊 2025 Statistics</h4>
                     <div class="stat-item">
                         <span><strong>Total Draws:</strong></span>
-                        <span>${data.total_draws}</span>
+                        <span>${data.total_draws || 0}</span>
                     </div>
                     <div class="stat-item">
                         <span><strong>Last Updated:</strong></span>
@@ -856,18 +908,20 @@
             `;
             
             // Display powerball frequencies
-            Object.entries(data.powerball_details)
-                .sort((a, b) => b[1].frequency - a[1].frequency)
-                .forEach(([pb, details]) => {
-                    if (details.frequency > 0) {
-                        statsHTML += `
-                            <div class="stat-item" style="background: #ffe6e6; padding: 10px; border-radius: 5px;">
-                                <span><strong>PB #${pb}:</strong></span>
-                                <span>${details.frequency} (${details.percentage}%)</span>
-                            </div>
-                        `;
-                    }
-                });
+            if (data.powerball_details && typeof data.powerball_details === 'object') {
+                Object.entries(data.powerball_details)
+                    .sort((a, b) => b[1].frequency - a[1].frequency)
+                    .forEach(([pb, details]) => {
+                        if (details.frequency > 0) {
+                            statsHTML += `
+                                <div class="stat-item" style="background: #ffe6e6; padding: 10px; border-radius: 5px;">
+                                    <span><strong>PB #${pb}:</strong></span>
+                                    <span>${details.frequency} (${details.percentage}%)</span>
+                                </div>
+                            `;
+                        }
+                    });
+            }
             
             statsHTML += `
                     </div>
