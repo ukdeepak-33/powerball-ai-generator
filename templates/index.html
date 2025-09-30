@@ -404,6 +404,7 @@
                 <h3>📈 2025 Frequency Analytics</h3>
                 <div id="analytics-content">
                     <button class="btn btn-secondary" onclick="loadFrequencyAnalysis()">📊 Load 2025 Stats</button>
+                    <button class="btn btn-secondary" onclick="debugData()">🔧 Debug Data</button>
                     <div class="settings" style="margin-top: 20px;">
                         <div class="setting-group">
                             <label>Sort By:</label>
@@ -725,6 +726,37 @@
             card.appendChild(analysis);
             
             return card;
+        }
+        
+        async function debugData() {
+            const statsContainer = document.getElementById('frequency-stats');
+            statsContainer.innerHTML = '<p>Running diagnostics...</p>';
+            
+            try {
+                const response = await fetch('/debug_2025_data');
+                const data = await response.json();
+                
+                console.log('Debug data:', data);
+                
+                statsContainer.innerHTML = `
+                    <div style="background: #f0f0f0; padding: 20px; border-radius: 10px; margin-top: 20px;">
+                        <h4>🔍 Debug Information</h4>
+                        <div style="font-family: monospace; font-size: 12px; white-space: pre-wrap; max-height: 600px; overflow-y: auto;">
+                            ${JSON.stringify(data, null, 2)}
+                        </div>
+                        <button class="btn btn-secondary" onclick="loadFrequencyAnalysis()" style="margin-top: 15px;">
+                            Try Loading Stats Again
+                        </button>
+                    </div>
+                `;
+                
+            } catch (error) {
+                statsContainer.innerHTML = `
+                    <div class="error-message">
+                        Debug failed: ${error.message}
+                    </div>
+                `;
+            }
         }
         
         async function loadFrequencyAnalysis() {
