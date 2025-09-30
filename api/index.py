@@ -1023,6 +1023,7 @@ def get_current_year_stats():
             }
         )
 
+
 @app.get("/group_a_analysis")
 def get_group_a_analysis(start_year: int = 2017, end_year: Optional[int] = None):
     """Analyze Group A numbers by year from 2017 to current"""
