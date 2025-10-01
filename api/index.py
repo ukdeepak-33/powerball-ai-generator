@@ -740,42 +740,6 @@ def get_frequency_analysis(year: int):
             content={"error": f"Failed to get frequency analysis: {str(e)}"}
         )
 
-@app.get("/current_year_stats")
-def get_current_year_stats():
-    """Get quick frequency stats for 2025"""
-    try:
-        year_data = fetch_year_draws(2025)
-        if not year_data:
-            return JSONResponse({"message": "No 2025 data available yet"})
-        
-        df = pd.DataFrame(year_data)
-        total_draws = len(df)
-        
-        # Get all number frequencies
-        all_frequencies = get_current_year_number_frequencies(2025)
-        
-        # Find most and least frequent
-        sorted_frequencies = sorted(all_frequencies.items(), key=lambda x: x[1], reverse=True)
-        
-        # Get powerball frequencies
-        pb_counts = Counter(df['Powerball'])
-        sorted_pb = sorted(pb_counts.items(), key=lambda x: x[1], reverse=True)
-        
-        return JSONResponse({
-            'year': 2025,
-            'total_draws': total_draws,
-            'most_frequent_numbers': sorted_frequencies[:10],
-            'least_frequent_numbers': sorted_frequencies[-10:],
-            'most_frequent_powerballs': sorted_pb[:5],
-            'least_frequent_powerballs': sorted_pb[-5:],
-            'last_updated': df.iloc[0]['Draw Date'] if not df.empty else None
-        })
-        
-    except Exception as e:
-        return JSONResponse(
-            status_code=500,
-            content={"error": f"Failed to get current year stats: {str(e)}"}
-        )
 
 # Global variable to hold models
 models = {}
@@ -926,12 +890,19 @@ def get_draw_analysis(year: Optional[int] = None, month: Optional[int] = None):
         traceback.print_exc()
         return JSONResponse(status_code=500, content={"message": f"An unexpected error occurred: {str(e)}"})
 
+# REPLACE the two duplicate /current_year_stats endpoints in your api/index.py
+# Delete BOTH existing @app.get("/current_year_stats") functions
+# and replace with this SINGLE one:
+
 @app.get("/current_year_stats")
 def get_current_year_stats():
     """Get detailed frequency stats for 2025 with grouped display"""
     try:
+        logger.info("Fetching 2025 draws...")
         year_data = fetch_year_draws(2025)
+        
         if not year_data or len(year_data) == 0:
+            logger.warning("No 2025 data found")
             return JSONResponse({
                 "error": None,
                 "message": "No 2025 data available yet",
@@ -945,6 +916,8 @@ def get_current_year_stats():
         
         df = pd.DataFrame(year_data)
         total_draws = len(df)
+        logger.info(f"Processing {total_draws} draws from 2025")
+        
         number_columns = ['Number 1', 'Number 2', 'Number 3', 'Number 4', 'Number 5']
         
         # Calculate frequencies directly
@@ -953,15 +926,17 @@ def get_current_year_stats():
             frequency_counts[i] = 0
         
         # Count each number's occurrences
-        for _, draw in df.iterrows():
+        for idx, draw in df.iterrows():
             for col in number_columns:
                 try:
                     number = int(draw[col])
                     if 1 <= number <= 69:
                         frequency_counts[number] += 1
                 except (ValueError, TypeError, KeyError) as e:
-                    logger.warning(f"Error processing number in column {col}: {e}")
+                    logger.warning(f"Error processing number in column {col} at row {idx}: {e}")
                     continue
+        
+        logger.info(f"Calculated frequencies for all numbers")
         
         # Group numbers by frequency
         frequency_groups = {}
@@ -983,6 +958,8 @@ def get_current_year_stats():
                 'is_group_a': bool(num in GROUP_A_NUMBERS)
             }
         
+        logger.info(f"Created number_details with {len(number_details)} entries")
+        
         # Get powerball frequencies
         pb_counts = Counter(df['Powerball'])
         powerball_details = {}
@@ -1002,13 +979,14 @@ def get_current_year_stats():
             'last_updated': str(df.iloc[0]['Draw Date']) if not df.empty else None
         }
         
-        logger.info(f"Successfully calculated stats for {total_draws} draws")
-        logger.info(f"Number details count: {len(number_details)}")
+        logger.info(f"✅ Successfully calculated stats for {total_draws} draws")
+        logger.info(f"✅ Number details count: {len(number_details)}")
+        logger.info(f"✅ Sample number detail: {number_details.get(1, 'N/A')}")
         
         return JSONResponse(result)
         
     except Exception as e:
-        logger.error(f"Error in get_current_year_stats: {str(e)}")
+        logger.error(f"❌ Error in get_current_year_stats: {str(e)}")
         logger.error(traceback.format_exc())
         return JSONResponse(
             status_code=500,
@@ -1022,7 +1000,6 @@ def get_current_year_stats():
                 "last_updated": None
             }
         )
-
 
 @app.get("/group_a_analysis")
 def get_group_a_analysis(start_year: int = 2017, end_year: Optional[int] = None):
