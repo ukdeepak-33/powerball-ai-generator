@@ -1072,7 +1072,155 @@ def get_group_a_analysis(start_year: int = 2017, end_year: Optional[int] = None)
             status_code=500,
             content={"error": f"Failed to get Group A analysis: {str(e)}"}
         )
+        
+# ADD this new endpoint to your api/index.py
+# This replaces or enhances the existing /group_a_analysis endpoint
 
+@app.get("/group_a_detailed_analysis")
+def get_group_a_detailed_analysis(start_year: int = 2017, end_year: Optional[int] = None):
+    """Analyze Group A numbers with actual combinations shown"""
+    try:
+        if end_year is None:
+            end_year = datetime.now().year
+        
+        analysis_by_year = {}
+        all_combinations = {5: [], 4: [], 3: [], 2: [], 1: [], 0: []}
+        
+        for year in range(start_year, end_year + 1):
+            year_data = fetch_year_draws(year)
+            if not year_data:
+                continue
+            
+            df = pd.DataFrame(year_data)
+            number_columns = ['Number 1', 'Number 2', 'Number 3', 'Number 4', 'Number 5']
+            
+            # Store combinations for each count level
+            year_combinations = {5: [], 4: [], 3: [], 2: [], 1: [], 0: []}
+            
+            for _, draw in df.iterrows():
+                draw_numbers = sorted([draw[col] for col in number_columns])
+                draw_date = draw.get('Draw Date', 'Unknown')
+                
+                # Identify Group A numbers in this draw
+                group_a_in_draw = sorted([num for num in draw_numbers if num in GROUP_A_NUMBERS])
+                non_group_a_in_draw = sorted([num for num in draw_numbers if num not in GROUP_A_NUMBERS])
+                
+                group_a_count = len(group_a_in_draw)
+                
+                # Store the combination
+                combination_info = {
+                    'date': draw_date,
+                    'group_a_numbers': group_a_in_draw,
+                    'non_group_a_numbers': non_group_a_in_draw,
+                    'all_numbers': draw_numbers,
+                    'powerball': draw.get('Powerball', 0)
+                }
+                
+                year_combinations[group_a_count].append(combination_info)
+                all_combinations[group_a_count].append({**combination_info, 'year': year})
+            
+            # Calculate statistics for the year
+            total_draws = len(df)
+            distribution = {i: len(year_combinations[i]) for i in range(6)}
+            percentages = {i: round((distribution[i] / total_draws) * 100, 1) if total_draws > 0 else 0 
+                          for i in range(6)}
+            
+            # Find most common Group A combinations for each level
+            most_common_combos = {}
+            for count in [5, 4, 3, 2]:
+                if year_combinations[count]:
+                    # Group by Group A numbers combination
+                    combo_counts = defaultdict(int)
+                    combo_details = defaultdict(list)
+                    
+                    for combo in year_combinations[count]:
+                        key = tuple(combo['group_a_numbers'])
+                        combo_counts[key] += 1
+                        combo_details[key].append({
+                            'date': combo['date'],
+                            'non_group_a': combo['non_group_a_numbers'],
+                            'all_numbers': combo['all_numbers']
+                        })
+                    
+                    # Sort by frequency
+                    sorted_combos = sorted(combo_counts.items(), key=lambda x: x[1], reverse=True)
+                    
+                    most_common_combos[count] = [
+                        {
+                            'group_a_combination': list(combo),
+                            'frequency': freq,
+                            'occurrences': combo_details[combo][:5]  # Show up to 5 examples
+                        }
+                        for combo, freq in sorted_combos[:10]  # Top 10 combinations
+                    ]
+            
+            analysis_by_year[year] = {
+                'total_draws': total_draws,
+                'distribution': distribution,
+                'percentages': percentages,
+                'most_common_combinations': most_common_combos,
+                'all_combinations': year_combinations
+            }
+        
+        # Overall statistics
+        overall_distribution = {i: len(all_combinations[i]) for i in range(6)}
+        total_draws_all_years = sum(overall_distribution.values())
+        overall_percentages = {i: round((overall_distribution[i] / total_draws_all_years) * 100, 1) 
+                               if total_draws_all_years > 0 else 0 for i in range(6)}
+        
+        # Find most common combinations across all years
+        overall_most_common = {}
+        for count in [5, 4, 3, 2]:
+            if all_combinations[count]:
+                combo_counts = defaultdict(int)
+                combo_years = defaultdict(set)
+                combo_details = defaultdict(list)
+                
+                for combo in all_combinations[count]:
+                    key = tuple(combo['group_a_numbers'])
+                    combo_counts[key] += 1
+                    combo_years[key].add(combo['year'])
+                    combo_details[key].append({
+                        'date': combo['date'],
+                        'year': combo['year'],
+                        'non_group_a': combo['non_group_a_numbers']
+                    })
+                
+                sorted_combos = sorted(combo_counts.items(), key=lambda x: x[1], reverse=True)
+                
+                overall_most_common[count] = [
+                    {
+                        'group_a_combination': list(combo),
+                        'total_frequency': freq,
+                        'appeared_in_years': sorted(list(combo_years[combo]), reverse=True),
+                        'year_count': len(combo_years[combo]),
+                        'recent_occurrences': sorted(combo_details[combo], 
+                                                    key=lambda x: x['date'], 
+                                                    reverse=True)[:5]
+                    }
+                    for combo, freq in sorted_combos[:15]  # Top 15 overall
+                ]
+        
+        return JSONResponse({
+            'start_year': start_year,
+            'end_year': end_year,
+            'analysis_by_year': analysis_by_year,
+            'overall_statistics': {
+                'total_draws': total_draws_all_years,
+                'distribution': overall_distribution,
+                'percentages': overall_percentages,
+                'most_common_combinations': overall_most_common
+            },
+            'group_a_numbers': sorted(list(GROUP_A_NUMBERS))
+        })
+        
+    except Exception as e:
+        logger.error(f"Error in detailed Group A analysis: {str(e)}")
+        logger.error(traceback.format_exc())
+        return JSONResponse(
+            status_code=500,
+            content={"error": f"Failed to get detailed Group A analysis: {str(e)}"}
+        )
 # For running the app
 if __name__ == "__main__":
     import uvicorn
