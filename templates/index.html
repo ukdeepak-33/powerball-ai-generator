@@ -772,7 +772,15 @@
                 
                 const data = await response.json();
                 
-                console.log('Frequency data received:', data);
+                console.log('=== FULL API RESPONSE ===');
+                console.log('Data:', data);
+                console.log('Total Draws:', data.total_draws);
+                console.log('Number Details Type:', typeof data.number_details);
+                console.log('Number Details:', data.number_details);
+                console.log('Number Details Keys:', data.number_details ? Object.keys(data.number_details) : 'null');
+                console.log('Frequency Groups:', data.frequency_groups);
+                console.log('Powerball Details:', data.powerball_details);
+                console.log('========================');
                 
                 if (data.error) {
                     statsContainer.innerHTML = `
@@ -793,9 +801,11 @@
                 if (!data.number_details || Object.keys(data.number_details).length === 0) {
                     statsContainer.innerHTML = `
                         <div style="background: #fff3cd; padding: 20px; border-radius: 10px; margin-top: 20px;">
-                            <h4>⚠️ No Data Available</h4>
-                            <p>There is no 2025 data available yet. The database may not have any draws for 2025.</p>
+                            <h4>⚠️ No Number Details Available</h4>
+                            <p>Data was fetched but number_details is empty.</p>
                             <p style="margin-top: 10px;"><strong>Total Draws:</strong> ${data.total_draws || 0}</p>
+                            <p style="margin-top: 10px;"><strong>Debug Info:</strong> Check browser console (F12) for full API response</p>
+                            <button class="btn btn-secondary" onclick="loadFrequencyAnalysis()" style="margin-top: 10px;">Retry</button>
                         </div>
                     `;
                     return;
@@ -810,6 +820,7 @@
                     <div class="error-message">
                         <strong>Error loading stats:</strong><br>
                         ${error.message}<br><br>
+                        <p>Check browser console (F12) for more details</p>
                         <button class="btn btn-secondary" onclick="loadFrequencyAnalysis()">Retry</button>
                         <button class="btn btn-secondary" onclick="testAPI()">Test API</button>
                     </div>
