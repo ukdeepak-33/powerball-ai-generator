@@ -3,337 +3,49 @@
 <head>
     <title>Powerball AI Generator - Enhanced</title>
     <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
-        
-        body {
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            min-height: 100vh;
-            color: #333;
-        }
-        
-        .container {
-            max-width: 1200px;
-            margin: 0 auto;
-            padding: 20px;
-        }
-        
-        .header {
-            text-align: center;
-            color: white;
-            margin-bottom: 30px;
-        }
-        
-        .header h1 {
-            font-size: 3rem;
-            margin-bottom: 10px;
-            text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
-        }
-        
-        .header p {
-            font-size: 1.2rem;
-            opacity: 0.9;
-        }
-        
-        .controls {
-            background: white;
-            border-radius: 15px;
-            padding: 30px;
-            margin-bottom: 30px;
-            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
-        }
-        
-        .control-row {
-            display: flex;
-            gap: 20px;
-            align-items: center;
-            justify-content: center;
-            flex-wrap: wrap;
-            margin-bottom: 20px;
-        }
-        
-        .btn {
-            background: linear-gradient(45deg, #e74c3c, #c0392b);
-            color: white;
-            padding: 15px 30px;
-            border: none;
-            border-radius: 25px;
-            font-size: 16px;
-            font-weight: bold;
-            cursor: pointer;
-            transition: all 0.3s ease;
-            box-shadow: 0 4px 15px rgba(231, 76, 60, 0.3);
-        }
-        
-        .btn:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 6px 20px rgba(231, 76, 60, 0.4);
-        }
-        
-        .btn:active {
-            transform: translateY(0);
-        }
-        
-        .btn-secondary {
-            background: linear-gradient(45deg, #3498db, #2980b9);
-            box-shadow: 0 4px 15px rgba(52, 152, 219, 0.3);
-        }
-        
-        .btn-secondary:hover {
-            box-shadow: 0 6px 20px rgba(52, 152, 219, 0.4);
-        }
-        
-        .settings {
-            display: flex;
-            gap: 20px;
-            align-items: center;
-            flex-wrap: wrap;
-        }
-        
-        .setting-group {
-            display: flex;
-            flex-direction: column;
-            gap: 5px;
-        }
-        
-        .setting-group label {
-            font-weight: bold;
-            color: #555;
-        }
-        
-        .setting-group select, .setting-group input {
-            padding: 10px;
-            border: 2px solid #ddd;
-            border-radius: 8px;
-            font-size: 14px;
-        }
-        
-        .tabs {
-            display: flex;
-            gap: 10px;
-            margin-bottom: 20px;
-            flex-wrap: wrap;
-        }
-        
-        .tab {
-            padding: 10px 20px;
-            background: #ecf0f1;
-            border: none;
-            border-radius: 8px 8px 0 0;
-            cursor: pointer;
-            font-weight: bold;
-            transition: all 0.3s ease;
-        }
-        
-        .tab.active {
-            background: white;
-            color: #e74c3c;
-        }
-        
-        .tab-content {
-            background: white;
-            border-radius: 0 15px 15px 15px;
-            padding: 30px;
-            box-shadow: 0 10px 30px rgba(0,0,0,0.1);
-            min-height: 400px;
-        }
-        
-        .results-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
-            gap: 20px;
-            margin-bottom: 30px;
-        }
-        
-        .result-card {
-            background: linear-gradient(135deg, #f8f9fa, #e9ecef);
-            border-radius: 15px;
-            padding: 25px;
-            box-shadow: 0 5px 15px rgba(0,0,0,0.1);
-            transition: transform 0.3s ease;
-        }
-        
-        .result-card:hover {
-            transform: translateY(-5px);
-        }
-        
-        .model-name {
-            font-size: 18px;
-            font-weight: bold;
-            color: #2c3e50;
-            margin-bottom: 15px;
-            text-transform: uppercase;
-            letter-spacing: 1px;
-        }
-        
-        .numbers-display {
-            text-align: center;
-            margin: 20px 0;
-        }
-        
-        .white-balls {
-            display: flex;
-            justify-content: center;
-            gap: 10px;
-            margin-bottom: 15px;
-        }
-        
-        .number-ball {
-            width: 50px;
-            height: 50px;
-            background: linear-gradient(135deg, #34495e, #2c3e50);
-            color: white;
-            border-radius: 50%;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-weight: bold;
-            font-size: 18px;
-            box-shadow: 0 3px 10px rgba(0,0,0,0.2);
-        }
-        
-        .powerball {
-            width: 60px;
-            height: 60px;
-            background: linear-gradient(135deg, #e74c3c, #c0392b);
-            color: white;
-            border-radius: 50%;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-weight: bold;
-            font-size: 20px;
-            margin: 0 auto;
-            box-shadow: 0 4px 15px rgba(231, 76, 60, 0.3);
-        }
-        
-        .analysis {
-            background: #f8f9fa;
-            padding: 15px;
-            border-radius: 10px;
-            margin-top: 15px;
-        }
-        
-        .analysis h4 {
-            color: #2c3e50;
-            margin-bottom: 10px;
-        }
-        
-        .stat-item {
-            display: flex;
-            justify-content: space-between;
-            margin-bottom: 8px;
-            padding: 5px 0;
-            border-bottom: 1px solid #dee2e6;
-        }
-        
-        .loading {
-            text-align: center;
-            padding: 50px;
-            display: none;
-        }
-        
-        .spinner {
-            width: 50px;
-            height: 50px;
-            border: 5px solid #f3f3f3;
-            border-top: 5px solid #e74c3c;
-            border-radius: 50%;
-            animation: spin 1s linear infinite;
-            margin: 0 auto 20px;
-        }
-        
-        @keyframes spin {
-            0% { transform: rotate(0deg); }
-            100% { transform: rotate(360deg); }
-        }
-        
-        .analytics-chart {
-            width: 100%;
-            height: 300px;
-            background: #f8f9fa;
-            border-radius: 10px;
-            margin: 20px 0;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            color: #666;
-        }
-        
-        .prediction-history {
-            background: #f8f9fa;
-            padding: 20px;
-            border-radius: 10px;
-            margin-top: 20px;
-        }
-        
-        .history-item {
-            padding: 10px;
-            border-bottom: 1px solid #dee2e6;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-        }
-
-        .frequency-details {
-            background: #e8f5e8;
-            padding: 10px;
-            border-radius: 8px;
-            margin-top: 10px;
-            font-size: 12px;
-        }
-
-        .error-message {
-            color: #e74c3c;
-            background: #ffe6e6;
-            padding: 15px;
-            border-radius: 8px;
-            margin: 20px 0;
-            text-align: center;
-        }
-
-        .debug-info {
-            background: #f0f0f0;
-            padding: 10px;
-            margin: 10px 0;
-            border-radius: 5px;
-            font-family: monospace;
-            font-size: 12px;
-            color: #666;
-            max-height: 200px;
-            overflow-y: auto;
-        }
-        
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); min-height: 100vh; color: #333; }
+        .container { max-width: 1200px; margin: 0 auto; padding: 20px; }
+        .header { text-align: center; color: white; margin-bottom: 30px; }
+        .header h1 { font-size: 3rem; margin-bottom: 10px; text-shadow: 2px 2px 4px rgba(0,0,0,0.3); }
+        .header p { font-size: 1.2rem; opacity: 0.9; }
+        .controls { background: white; border-radius: 15px; padding: 30px; margin-bottom: 30px; box-shadow: 0 10px 30px rgba(0,0,0,0.2); }
+        .control-row { display: flex; gap: 20px; align-items: center; justify-content: center; flex-wrap: wrap; margin-bottom: 20px; }
+        .btn { background: linear-gradient(45deg, #e74c3c, #c0392b); color: white; padding: 15px 30px; border: none; border-radius: 25px; font-size: 16px; font-weight: bold; cursor: pointer; transition: all 0.3s ease; box-shadow: 0 4px 15px rgba(231, 76, 60, 0.3); }
+        .btn:hover { transform: translateY(-2px); box-shadow: 0 6px 20px rgba(231, 76, 60, 0.4); }
+        .btn:active { transform: translateY(0); }
+        .btn-secondary { background: linear-gradient(45deg, #3498db, #2980b9); box-shadow: 0 4px 15px rgba(52, 152, 219, 0.3); }
+        .btn-secondary:hover { box-shadow: 0 6px 20px rgba(52, 152, 219, 0.4); }
+        .settings { display: flex; gap: 20px; align-items: center; flex-wrap: wrap; }
+        .setting-group { display: flex; flex-direction: column; gap: 5px; }
+        .setting-group label { font-weight: bold; color: #555; }
+        .setting-group select, .setting-group input { padding: 10px; border: 2px solid #ddd; border-radius: 8px; font-size: 14px; }
+        .tabs { display: flex; gap: 10px; margin-bottom: 20px; flex-wrap: wrap; }
+        .tab { padding: 10px 20px; background: #ecf0f1; border: none; border-radius: 8px 8px 0 0; cursor: pointer; font-weight: bold; transition: all 0.3s ease; }
+        .tab.active { background: white; color: #e74c3c; }
+        .tab-content { background: white; border-radius: 0 15px 15px 15px; padding: 30px; box-shadow: 0 10px 30px rgba(0,0,0,0.1); min-height: 400px; }
+        .results-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(350px, 1fr)); gap: 20px; margin-bottom: 30px; }
+        .result-card { background: linear-gradient(135deg, #f8f9fa, #e9ecef); border-radius: 15px; padding: 25px; box-shadow: 0 5px 15px rgba(0,0,0,0.1); transition: transform 0.3s ease; }
+        .result-card:hover { transform: translateY(-5px); }
+        .model-name { font-size: 18px; font-weight: bold; color: #2c3e50; margin-bottom: 15px; text-transform: uppercase; letter-spacing: 1px; }
+        .numbers-display { text-align: center; margin: 20px 0; }
+        .white-balls { display: flex; justify-content: center; gap: 10px; margin-bottom: 15px; }
+        .number-ball { width: 50px; height: 50px; background: linear-gradient(135deg, #34495e, #2c3e50); color: white; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: bold; font-size: 18px; box-shadow: 0 3px 10px rgba(0,0,0,0.2); }
+        .powerball { width: 60px; height: 60px; background: linear-gradient(135deg, #e74c3c, #c0392b); color: white; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: bold; font-size: 20px; margin: 0 auto; box-shadow: 0 4px 15px rgba(231, 76, 60, 0.3); }
+        .analysis { background: #f8f9fa; padding: 15px; border-radius: 10px; margin-top: 15px; }
+        .analysis h4 { color: #2c3e50; margin-bottom: 10px; }
+        .stat-item { display: flex; justify-content: space-between; margin-bottom: 8px; padding: 5px 0; border-bottom: 1px solid #dee2e6; }
+        .loading { text-align: center; padding: 50px; display: none; }
+        .spinner { width: 50px; height: 50px; border: 5px solid #f3f3f3; border-top: 5px solid #e74c3c; border-radius: 50%; animation: spin 1s linear infinite; margin: 0 auto 20px; }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+        .frequency-details { background: #e8f5e8; padding: 10px; border-radius: 8px; margin-top: 10px; font-size: 12px; }
+        .error-message { color: #e74c3c; background: #ffe6e6; padding: 15px; border-radius: 8px; margin: 20px 0; text-align: center; }
         @media (max-width: 768px) {
-            .header h1 {
-                font-size: 2rem;
-            }
-            
-            .controls {
-                padding: 20px;
-            }
-            
-            .control-row {
-                flex-direction: column;
-                align-items: stretch;
-            }
-            
-            .btn {
-                width: 100%;
-                margin-bottom: 10px;
-            }
-            
-            .settings {
-                justify-content: center;
-            }
-            
-            .results-grid {
-                grid-template-columns: 1fr;
-            }
+            .header h1 { font-size: 2rem; }
+            .controls { padding: 20px; }
+            .control-row { flex-direction: column; align-items: stretch; }
+            .btn { width: 100%; margin-bottom: 10px; }
+            .results-grid { grid-template-columns: 1fr; }
         }
     </style>
 </head>
@@ -341,42 +53,32 @@
     <div class="container">
         <div class="header">
             <h1>🎱 Powerball AI Generator</h1>
-            <p>Enhanced with Individual 2025 Frequency Analysis</p>
+            <p>Enhanced with 2025 Frequency Analysis & Detailed Group A Combinations</p>
         </div>
         
         <div class="controls">
             <div class="control-row">
                 <button class="btn" onclick="generateNumbers()">🎲 Generate Numbers</button>
                 <button class="btn btn-secondary" onclick="showAnalytics()">📊 View Analytics</button>
-                <button class="btn btn-secondary" onclick="showHistory()">📈 Prediction History</button>
-                <button class="btn btn-secondary" onclick="testAPI()">🔧 Test API</button>
+                <button class="btn btn-secondary" onclick="showHistory()">📈 History</button>
             </div>
-            
             <div class="settings">
                 <div class="setting-group">
-                    <label>Model Priority:</label>
+                    <label>Model:</label>
                     <select id="modelPriority">
                         <option value="all">All Models</option>
-                        <option value="random_forest">Random Forest Only</option>
-                        <option value="gradient_boosting">Gradient Boosting Only</option>
-                        <option value="knn">KNN Only</option>
-                        <option value="ensemble">Ensemble Only</option>
-                        <option value="fallback">Fallback Only</option>
+                        <option value="ensemble">Ensemble</option>
+                        <option value="random_forest">Random Forest</option>
+                        <option value="gradient_boosting">Gradient Boosting</option>
+                        <option value="knn">KNN</option>
                     </select>
                 </div>
-                
                 <div class="setting-group">
-                    <label>Analysis Depth:</label>
+                    <label>Analysis:</label>
                     <select id="analysisDepth">
                         <option value="basic">Basic</option>
                         <option value="detailed">Detailed</option>
-                        <option value="advanced">Advanced</option>
                     </select>
-                </div>
-                
-                <div class="setting-group">
-                    <label>Show Debug:</label>
-                    <input type="checkbox" id="showDebug">
                 </div>
             </div>
         </div>
@@ -384,808 +86,401 @@
         <div class="tabs">
             <button class="tab active" onclick="showTab('predictions')">🎯 Predictions</button>
             <button class="tab" onclick="showTab('analytics')">📊 Analytics</button>
-            <button class="tab" onclick="showTab('groupA')">🎱 Group A Analysis</button>
+            <button class="tab" onclick="showTab('groupA')">🎱 Group A</button>
             <button class="tab" onclick="showTab('history')">📝 History</button>
-            <button class="tab" onclick="showTab('insights')">💡 Insights</button>
         </div>
         
         <div class="tab-content">
             <div id="predictions-tab">
-                <div class="loading" id="loading">
-                    <div class="spinner"></div>
-                    <p>Generating your lucky numbers...</p>
-                </div>
+                <div class="loading" id="loading"><div class="spinner"></div><p>Generating...</p></div>
                 <div id="error-container"></div>
-                <div id="debug-container"></div>
                 <div id="results-container" class="results-grid"></div>
             </div>
             
-            <div id="analytics-tab" style="display: none;">
+            <div id="analytics-tab" style="display:none;">
                 <h3>📈 2025 Frequency Analytics</h3>
-                <div id="analytics-content">
-                    <button class="btn btn-secondary" onclick="loadFrequencyAnalysis()">📊 Load 2025 Stats</button>
-                    <button class="btn btn-secondary" onclick="debugData()">🔧 Debug Data</button>
-                    <div class="settings" style="margin-top: 20px;">
-                        <div class="setting-group">
-                            <label>Sort By:</label>
-                            <select id="frequencySort" onchange="updateFrequencyDisplay()">
-                                <option value="frequency_desc">Frequency (High to Low)</option>
-                                <option value="frequency_asc">Frequency (Low to High)</option>
-                                <option value="number_asc">Number (1-69)</option>
-                                <option value="number_desc">Number (69-1)</option>
-                            </select>
-                        </div>
-                        <div class="setting-group">
-                            <label>Filter:</label>
-                            <select id="frequencyFilter" onchange="updateFrequencyDisplay()">
-                                <option value="all">All Numbers</option>
-                                <option value="group_a">Group A Only</option>
-                                <option value="non_group_a">Non-Group A Only</option>
-                            </select>
-                        </div>
+                <button class="btn btn-secondary" onclick="loadFrequencyAnalysis()">📊 Load Stats</button>
+                <div class="settings" style="margin-top:20px;">
+                    <div class="setting-group">
+                        <label>Sort:</label>
+                        <select id="frequencySort" onchange="updateFrequencyDisplay()">
+                            <option value="frequency_desc">Frequency ↓</option>
+                            <option value="frequency_asc">Frequency ↑</option>
+                            <option value="number_asc">Number ↑</option>
+                        </select>
                     </div>
-                    <div id="frequency-stats"></div>
+                    <div class="setting-group">
+                        <label>Filter:</label>
+                        <select id="frequencyFilter" onchange="updateFrequencyDisplay()">
+                            <option value="all">All</option>
+                            <option value="group_a">Group A</option>
+                            <option value="non_group_a">Non-Group A</option>
+                        </select>
+                    </div>
                 </div>
+                <div id="frequency-stats"></div>
             </div>
             
-            <div id="groupA-tab" style="display: none;">
-                <h3>🎱 Group A Analysis (2017-Current)</h3>
-                <div id="groupA-content">
-                    <button class="btn btn-secondary" onclick="loadGroupAAnalysis()">📊 Load Group A Analysis</button>
-                    <div class="settings" style="margin-top: 20px;">
-                        <div class="setting-group">
-                            <label>View:</label>
-                            <select id="groupAView" onchange="updateGroupADisplay()">
-                                <option value="by_year">By Year</option>
-                                <option value="overall">Overall Statistics</option>
-                            </select>
-                        </div>
-                        <div class="setting-group">
-                            <label>Sort By:</label>
-                            <select id="groupASort" onchange="updateGroupADisplay()">
-                                <option value="year_desc">Year (Newest First)</option>
-                                <option value="year_asc">Year (Oldest First)</option>
-                                <option value="most_5">Most 5 Group A</option>
-                                <option value="most_4">Most 4 Group A</option>
-                                <option value="most_3">Most 3 Group A</option>
-                            </select>
-                        </div>
+            <div id="groupA-tab" style="display:none;">
+                <h3>🎱 Group A Analysis</h3>
+                <button class="btn btn-secondary" onclick="loadGroupAAnalysis()">📊 Summary</button>
+                <button class="btn btn-secondary" onclick="loadDetailedGroupAAnalysis()">🔍 Combinations</button>
+                <div class="settings" style="margin-top:20px;">
+                    <div class="setting-group">
+                        <label>View:</label>
+                        <select id="groupAView" onchange="updateDisplay()">
+                            <option value="combinations">Top Combinations</option>
+                            <option value="by_year">By Year</option>
+                            <option value="overall">Overall</option>
+                        </select>
                     </div>
-                    <div id="groupA-stats"></div>
+                    <div class="setting-group">
+                        <label>Show:</label>
+                        <select id="groupALevel" onchange="updateDisplay()">
+                            <option value="all">All Levels</option>
+                            <option value="5">5 Group A</option>
+                            <option value="4">4 Group A</option>
+                            <option value="3">3 Group A</option>
+                            <option value="2">2 Group A</option>
+                        </select>
+                    </div>
+                    <div class="setting-group">
+                        <label>Sort:</label>
+                        <select id="groupASort" onchange="updateDisplay()">
+                            <option value="frequency">Frequency</option>
+                            <option value="recent">Recent</option>
+                            <option value="year_spread">Year Spread</option>
+                        </select>
+                    </div>
                 </div>
+                <div id="groupA-stats"></div>
             </div>
             
-            <div id="history-tab" style="display: none;">
-                <h3>🕒 Prediction History</h3>
-                <div class="prediction-history" id="history-container">
-                    <p>No predictions yet. Generate some numbers to see history!</p>
-                </div>
-            </div>
-            
-            <div id="insights-tab" style="display: none;">
-                <h3>💡 AI Insights & Recommendations</h3>
-                <div id="insights-content">
-                    <p>🧠 Enhanced frequency analysis provides these insights:</p>
-                    <div class="stat-item">
-                        <span>Individual Frequency Calculation:</span>
-                        <span>2025 Data Only ✅</span>
-                    </div>
-                    <div class="stat-item">
-                        <span>Pattern Analysis:</span>
-                        <span>Historical + Current Year</span>
-                    </div>
-                    <div class="stat-item">
-                        <span>Enhanced Features:</span>
-                        <span>Percentage Calculations</span>
-                    </div>
-                </div>
+            <div id="history-tab" style="display:none;">
+                <h3>🕒 History</h3>
+                <div id="history-container"><p>No predictions yet.</p></div>
             </div>
         </div>
     </div>
 
     <script>
-        let predictionHistory = [];
-        let lastApiResponse = null;
-        let currentFrequencyData = null;
-        let currentGroupAData = null;
-        
-        async function testAPI() {
-            try {
-                console.log('Testing API connection...');
-                const response = await fetch('/health');
-                const data = await response.json();
-                
-                alert(`API Status: ${data.status}\nMessage: ${data.message}\nFrequency Fix: ${data.frequency_fix || 'Not specified'}`);
-                console.log('Health check:', data);
-                
-            } catch (error) {
-                console.error('API test failed:', error);
-                alert('API test failed: ' + error.message);
-            }
-        }
+        let predictionHistory=[], currentFrequencyData=null, currentGroupAData=null, detailedGroupAData=null;
         
         async function generateNumbers() {
-            const resultsContainer = document.getElementById('results-container');
-            const errorContainer = document.getElementById('error-container');
-            const debugContainer = document.getElementById('debug-container');
-            const loadingDiv = document.getElementById('loading');
-            const modelPriority = document.getElementById('modelPriority').value;
-            const analysisDepth = document.getElementById('analysisDepth').value;
-            const showDebug = document.getElementById('showDebug').checked;
+            const container = document.getElementById('results-container');
+            const loading = document.getElementById('loading');
+            const errorDiv = document.getElementById('error-container');
+            container.innerHTML = ''; errorDiv.innerHTML = ''; loading.style.display = 'block';
             
-            // Clear previous results
-            resultsContainer.innerHTML = '';
-            errorContainer.innerHTML = '';
-            debugContainer.innerHTML = '';
-            loadingDiv.style.display = 'block';
-
             try {
-                console.log('Fetching from /generate...');
-                const response = await fetch('/generate');
+                const res = await fetch('/generate');
+                const data = await res.json();
+                loading.style.display = 'none';
                 
-                if (!response.ok) {
-                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                const priority = document.getElementById('modelPriority').value;
+                const depth = document.getElementById('analysisDepth').value;
+                const filtered = priority === 'all' ? data : (data[priority] ? {[priority]: data[priority]} : data);
+                
+                for (const model in filtered) {
+                    const card = createCard(model, filtered[model], depth);
+                    container.appendChild(card);
+                    predictionHistory.unshift({date: new Date().toLocaleDateString(), model, numbers: filtered[model].generated_numbers});
                 }
-                
-                const data = await response.json();
-                lastApiResponse = data;
-                
-                console.log('API Response:', data);
-                
-                loadingDiv.style.display = 'none';
-
-                if (showDebug) {
-                    debugContainer.innerHTML = `
-                        <div class="debug-info">
-                            <strong>Debug Info:</strong><br>
-                            Response keys: ${Object.keys(data).join(', ')}<br>
-                            Total models: ${Object.keys(data).length}<br>
-                            Raw response: ${JSON.stringify(data, null, 2)}
-                        </div>
-                    `;
-                }
-
-                // Filter results based on model priority
-                let filteredData;
-                if (modelPriority === 'all') {
-                    filteredData = data;
-                } else if (data[modelPriority]) {
-                    filteredData = { [modelPriority]: data[modelPriority] };
-                } else {
-                    // If the specific model isn't available, show what we have
-                    filteredData = data;
-                }
-
-                let cardsCreated = 0;
-                for (const modelName in filteredData) {
-                    if (filteredData.hasOwnProperty(modelName)) {
-                        try {
-                            const modelData = filteredData[modelName];
-                            console.log(`Processing ${modelName}:`, modelData);
-                            
-                            const resultCard = createResultCard(modelName, modelData, analysisDepth);
-                            resultsContainer.appendChild(resultCard);
-                            cardsCreated++;
-                            
-                            // Add to history
-                            predictionHistory.unshift({
-                                date: new Date().toLocaleDateString(),
-                                model: modelName,
-                                numbers: modelData.generated_numbers,
-                                analysis: modelData.analysis
-                            });
-                            
-                        } catch (cardError) {
-                            console.error(`Error creating card for ${modelName}:`, cardError);
-                            errorContainer.innerHTML += `
-                                <div class="error-message">
-                                    Error processing ${modelName}: ${cardError.message}
-                                </div>
-                            `;
-                        }
-                    }
-                }
-                
-                if (cardsCreated === 0) {
-                    errorContainer.innerHTML = `
-                        <div class="error-message">
-                            No prediction cards could be created. Check the debug info below.
-                        </div>
-                    `;
-                }
-                
-                // Keep only last 50 predictions
-                predictionHistory = predictionHistory.slice(0, 50);
-                updateHistoryTab();
-                
-            } catch (error) {
-                loadingDiv.style.display = 'none';
-                console.error('Generation error:', error);
-                
-                errorContainer.innerHTML = `
-                    <div class="error-message">
-                        <strong>Error generating numbers:</strong><br>
-                        ${error.message}<br><br>
-                        <button class="btn btn-secondary" onclick="testAPI()">Test API Connection</button>
-                    </div>
-                `;
-                
-                if (showDebug) {
-                    debugContainer.innerHTML = `
-                        <div class="debug-info">
-                            <strong>Error Details:</strong><br>
-                            ${error.stack || error.message}
-                        </div>
-                    `;
-                }
+            } catch(e) {
+                loading.style.display = 'none';
+                errorDiv.innerHTML = `<div class="error-message">Error: ${e.message}</div>`;
             }
         }
         
-        function createResultCard(modelName, modelData, analysisDepth) {
-            console.log(`Creating card for ${modelName} with data:`, modelData);
-            
+        function createCard(name, data, depth) {
             const card = document.createElement('div');
             card.className = 'result-card';
+            const nums = data?.generated_numbers?.white_balls || [];
+            const pb = data?.generated_numbers?.powerball || '?';
+            const analysis = data?.analysis || {};
             
-            const modelTitle = document.createElement('div');
-            modelTitle.className = 'model-name';
-            modelTitle.textContent = modelName.replace('_', ' ').toUpperCase();
-            
-            const numbersDisplay = document.createElement('div');
-            numbersDisplay.className = 'numbers-display';
-            
-            const whiteBalls = document.createElement('div');
-            whiteBalls.className = 'white-balls';
-            
-            // Safely get white balls
-            const whiteBallNumbers = modelData?.generated_numbers?.white_balls || [];
-            whiteBallNumbers.forEach(num => {
-                const ball = document.createElement('div');
-                ball.className = 'number-ball';
-                ball.textContent = num;
-                whiteBalls.appendChild(ball);
-            });
-            
-            const powerball = document.createElement('div');
-            powerball.className = 'powerball';
-            powerball.textContent = modelData?.generated_numbers?.powerball || '?';
-            
-            numbersDisplay.appendChild(whiteBalls);
-            numbersDisplay.appendChild(powerball);
-            
-            const analysis = document.createElement('div');
-            analysis.className = 'analysis';
-            
-            // Get analysis data safely
-            const analysisData = modelData?.analysis || {};
-            const frequency2025 = analysisData['2025_frequency'] || {};
-            const frequencyBreakdown = analysisData['frequency_breakdown'] || {};
-            
-            // Calculate 2025 frequency total safely
-            let frequency2025Total = 0;
-            try {
-                const whiteBallCounts = frequency2025.white_ball_counts || frequency2025.individual_frequencies || {};
-                const whiteBallTotal = Object.values(whiteBallCounts).reduce((a, b) => (a || 0) + (b || 0), 0);
-                const powerballCount = frequency2025.powerball_count || frequencyBreakdown.powerball_frequency || 0;
-                frequency2025Total = whiteBallTotal + powerballCount;
-            } catch (e) {
-                console.error('Error calculating frequency total:', e);
-            }
-            
-            analysis.innerHTML = `
-                <h4>📊 Analysis</h4>
-                <div class="stat-item">
-                    <span>Group A Numbers:</span>
-                    <span>${analysisData.group_a_count || 0}/5</span>
+            card.innerHTML = `
+                <div class="model-name">${name.replace('_',' ').toUpperCase()}</div>
+                <div class="numbers-display">
+                    <div class="white-balls">${nums.map(n=>`<div class="number-ball">${n}</div>`).join('')}</div>
+                    <div class="powerball">${pb}</div>
                 </div>
-                <div class="stat-item">
-                    <span>Odd/Even Ratio:</span>
-                    <span>${analysisData.odd_even_ratio || 'N/A'}</span>
-                </div>
-                <div class="stat-item">
-                    <span>2025 Frequency Total:</span>
-                    <span>${frequency2025Total}</span>
-                </div>
-                <div class="stat-item">
-                    <span>2025 Total Draws:</span>
-                    <span>${frequency2025.total_draws || frequency2025.total_2025_draws || 0}</span>
+                <div class="analysis">
+                    <h4>📊 Analysis</h4>
+                    <div class="stat-item"><span>Group A:</span><span>${analysis.group_a_count||0}/5</span></div>
+                    <div class="stat-item"><span>Odd/Even:</span><span>${analysis.odd_even_ratio||'N/A'}</span></div>
+                    ${depth!=='basic' && analysis.frequency_breakdown ? `
+                        <div class="frequency-details">
+                            <strong>2025 Frequencies:</strong><br>
+                            ${Object.entries(analysis.frequency_breakdown.individual_white_balls||{}).map(([n,f])=>
+                                `#${n}: ${f} (${analysis.frequency_breakdown.individual_percentages[n]}%)`
+                            ).join(' | ')}
+                        </div>
+                    ` : ''}
                 </div>
             `;
-            
-            if (analysisDepth !== 'basic') {
-                const detailedAnalysis = document.createElement('div');
-                
-                // Enhanced frequency details
-                let frequencyDetails = '';
-                if (frequencyBreakdown.individual_white_balls) {
-                    const details = [];
-                    for (const [num, freq] of Object.entries(frequencyBreakdown.individual_white_balls)) {
-                        const pct = frequencyBreakdown.individual_percentages?.[num] || 0;
-                        details.push(`#${num}: ${freq} (${pct}%)`);
-                    }
-                    frequencyDetails = `
-                        <div class="frequency-details">
-                            <strong>2025 Individual Frequencies:</strong><br>
-                            ${details.join(' | ')}<br>
-                            <strong>Powerball:</strong> ${frequencyBreakdown.powerball_frequency || 0} (${frequencyBreakdown.powerball_percentage || 0}%)
-                        </div>
-                    `;
-                }
-                
-                detailedAnalysis.innerHTML = `
-                    ${frequencyDetails}
-                    <p style="margin-top: 15px; font-size: 12px; color: #666;">
-                        ${(analysisData.message || 'No additional analysis available').replace(/\n/g, '<br>')}
-                    </p>
-                `;
-                analysis.appendChild(detailedAnalysis);
-            }
-            
-            card.appendChild(modelTitle);
-            card.appendChild(numbersDisplay);
-            card.appendChild(analysis);
-            
             return card;
         }
         
-        async function debugData() {
-            const statsContainer = document.getElementById('frequency-stats');
-            statsContainer.innerHTML = '<p>Running diagnostics...</p>';
-            
-            try {
-                const response = await fetch('/debug_2025_data');
-                const data = await response.json();
-                
-                console.log('Debug data:', data);
-                
-                statsContainer.innerHTML = `
-                    <div style="background: #f0f0f0; padding: 20px; border-radius: 10px; margin-top: 20px;">
-                        <h4>🔍 Debug Information</h4>
-                        <div style="font-family: monospace; font-size: 12px; white-space: pre-wrap; max-height: 600px; overflow-y: auto;">
-                            ${JSON.stringify(data, null, 2)}
-                        </div>
-                        <button class="btn btn-secondary" onclick="loadFrequencyAnalysis()" style="margin-top: 15px;">
-                            Try Loading Stats Again
-                        </button>
-                    </div>
-                `;
-                
-            } catch (error) {
-                statsContainer.innerHTML = `
-                    <div class="error-message">
-                        Debug failed: ${error.message}
-                    </div>
-                `;
-            }
-        }
-        
         async function loadFrequencyAnalysis() {
-            const statsContainer = document.getElementById('frequency-stats');
-            statsContainer.innerHTML = '<p>Loading 2025 frequency statistics...</p>';
-            
+            const stats = document.getElementById('frequency-stats');
+            stats.innerHTML = '<p>Loading...</p>';
             try {
-                const response = await fetch('/current_year_stats');
-                
-                if (!response.ok) {
-                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-                }
-                
-                const data = await response.json();
-                
-                console.log('=== FULL API RESPONSE ===');
-                console.log('Data:', data);
-                console.log('Total Draws:', data.total_draws);
-                console.log('Number Details Type:', typeof data.number_details);
-                console.log('Number Details:', data.number_details);
-                console.log('Number Details Keys:', data.number_details ? Object.keys(data.number_details) : 'null');
-                console.log('Frequency Groups:', data.frequency_groups);
-                console.log('Powerball Details:', data.powerball_details);
-                console.log('========================');
-                
-                if (data.error) {
-                    statsContainer.innerHTML = `
-                        <div class="error-message">
-                            <strong>Error:</strong> ${data.error}<br>
-                            <p style="margin-top: 10px;">This could mean:</p>
-                            <ul style="text-align: left; margin: 10px 0;">
-                                <li>No 2025 data is available in the database yet</li>
-                                <li>Database connection issue</li>
-                                <li>API endpoint needs verification</li>
-                            </ul>
-                            <button class="btn btn-secondary" onclick="testAPI()" style="margin-top: 10px;">Test API Connection</button>
-                        </div>
-                    `;
-                    return;
-                }
-                
-                if (!data.number_details || Object.keys(data.number_details).length === 0) {
-                    statsContainer.innerHTML = `
-                        <div style="background: #fff3cd; padding: 20px; border-radius: 10px; margin-top: 20px;">
-                            <h4>⚠️ No Number Details Available</h4>
-                            <p>Data was fetched but number_details is empty.</p>
-                            <p style="margin-top: 10px;"><strong>Total Draws:</strong> ${data.total_draws || 0}</p>
-                            <p style="margin-top: 10px;"><strong>Debug Info:</strong> Check browser console (F12) for full API response</p>
-                            <button class="btn btn-secondary" onclick="loadFrequencyAnalysis()" style="margin-top: 10px;">Retry</button>
-                        </div>
-                    `;
-                    return;
-                }
-                
-                currentFrequencyData = data;
+                const res = await fetch('/current_year_stats');
+                currentFrequencyData = await res.json();
                 updateFrequencyDisplay();
-                
-            } catch (error) {
-                console.error('Error loading frequency analysis:', error);
-                statsContainer.innerHTML = `
-                    <div class="error-message">
-                        <strong>Error loading stats:</strong><br>
-                        ${error.message}<br><br>
-                        <p>Check browser console (F12) for more details</p>
-                        <button class="btn btn-secondary" onclick="loadFrequencyAnalysis()">Retry</button>
-                        <button class="btn btn-secondary" onclick="testAPI()">Test API</button>
-                    </div>
-                `;
+            } catch(e) {
+                stats.innerHTML = `<div class="error-message">Error: ${e.message}</div>`;
             }
         }
         
         function updateFrequencyDisplay() {
-            if (!currentFrequencyData) {
-                console.error('No frequency data available');
-                return;
-            }
-            
-            const statsContainer = document.getElementById('frequency-stats');
-            const sortBy = document.getElementById('frequencySort')?.value || 'frequency_desc';
-            const filterBy = document.getElementById('frequencyFilter')?.value || 'all';
+            if(!currentFrequencyData) return;
             const data = currentFrequencyData;
+            const sort = document.getElementById('frequencySort')?.value || 'frequency_desc';
+            const filter = document.getElementById('frequencyFilter')?.value || 'all';
             
-            // Validate data structure
-            if (!data.number_details || typeof data.number_details !== 'object') {
-                statsContainer.innerHTML = `
-                    <div class="error-message">
-                        Invalid data structure received from API. 
-                        <button class="btn btn-secondary" onclick="loadFrequencyAnalysis()">Retry</button>
+            let nums = Object.entries(data.number_details || {}).map(([n,d])=>({number:parseInt(n), ...d}));
+            if(filter==='group_a') nums = nums.filter(n=>n.is_group_a);
+            else if(filter==='non_group_a') nums = nums.filter(n=>!n.is_group_a);
+            
+            if(sort==='frequency_desc') nums.sort((a,b)=>b.frequency-a.frequency);
+            else if(sort==='frequency_asc') nums.sort((a,b)=>a.frequency-b.frequency);
+            else nums.sort((a,b)=>a.number-b.number);
+            
+            const groups = {};
+            nums.forEach(n=>{ if(!groups[n.frequency]) groups[n.frequency]=[]; groups[n.frequency].push(n); });
+            
+            let html = `<div style="background:#f8f9fa;padding:20px;border-radius:10px;margin-top:20px;">
+                <h4>📊 2025 Stats</h4>
+                <div class="stat-item"><span>Total Draws:</span><span>${data.total_draws||0}</span></div>
+                <div class="stat-item"><span>Showing:</span><span>${nums.length} numbers</span></div>
+            </div><div style="margin-top:30px;"><h4>🎯 Frequencies (Grouped)</h4>`;
+            
+            Object.keys(groups).sort((a,b)=>b-a).forEach(freq=>{
+                const items = groups[freq];
+                html += `<div style="background:#f8f9fa;padding:15px;border-radius:8px;margin-bottom:15px;">
+                    <div style="display:flex;justify-content:space-between;margin-bottom:10px;">
+                        <strong>${freq}x (${items[0].percentage}%)</strong>
+                        <span style="background:#3498db;color:white;padding:5px 10px;border-radius:5px;">${items.length} nums</span>
                     </div>
-                `;
-                console.error('Invalid data structure:', data);
-                return;
-            }
-            
-            // Filter and sort numbers
-            let numbersArray = Object.entries(data.number_details).map(([num, details]) => ({
-                number: parseInt(num),
-                ...details
-            }));
-            
-            // Apply filter
-            if (filterBy === 'group_a') {
-                numbersArray = numbersArray.filter(n => n.is_group_a);
-            } else if (filterBy === 'non_group_a') {
-                numbersArray = numbersArray.filter(n => !n.is_group_a);
-            }
-            
-            // Apply sort
-            if (sortBy === 'frequency_desc') {
-                numbersArray.sort((a, b) => b.frequency - a.frequency || a.number - b.number);
-            } else if (sortBy === 'frequency_asc') {
-                numbersArray.sort((a, b) => a.frequency - b.frequency || a.number - b.number);
-            } else if (sortBy === 'number_asc') {
-                numbersArray.sort((a, b) => a.number - b.number);
-            } else if (sortBy === 'number_desc') {
-                numbersArray.sort((a, b) => b.number - a.number);
-            }
-            
-            // Group by frequency
-            const frequencyGroups = {};
-            numbersArray.forEach(num => {
-                if (!frequencyGroups[num.frequency]) {
-                    frequencyGroups[num.frequency] = [];
-                }
-                frequencyGroups[num.frequency].push(num);
+                    <div style="display:flex;flex-wrap:wrap;gap:8px;">
+                        ${items.map(n=>`<span style="padding:8px 12px;background:${n.is_group_a?'linear-gradient(135deg,#e74c3c,#c0392b)':'linear-gradient(135deg,#34495e,#2c3e50)'};color:white;border-radius:8px;font-weight:bold;">${n.number}${n.is_group_a?' ⭐':''}</span>`).join('')}
+                    </div>
+                </div>`;
             });
             
-            let statsHTML = `
-                <div style="background: #f8f9fa; padding: 20px; border-radius: 10px; margin-top: 20px;">
-                    <h4>📊 2025 Statistics</h4>
-                    <div class="stat-item">
-                        <span><strong>Total Draws:</strong></span>
-                        <span>${data.total_draws || 0}</span>
-                    </div>
-                    <div class="stat-item">
-                        <span><strong>Last Updated:</strong></span>
-                        <span>${data.last_updated || 'N/A'}</span>
-                    </div>
-                    <div class="stat-item">
-                        <span><strong>Showing:</strong></span>
-                        <span>${numbersArray.length} numbers</span>
-                    </div>
-                </div>
-                
-                <div style="margin-top: 30px;">
-                    <h4>🎯 White Ball Frequencies (Grouped)</h4>
-            `;
+            html += `</div><div style="margin-top:20px;padding:15px;background:#e8f5e8;border-radius:8px;">
+                <strong>Legend:</strong> <span style="color:#e74c3c;">⭐ = Group A</span>
+            </div>`;
             
-            // Display grouped by frequency
-            Object.keys(frequencyGroups).sort((a, b) => b - a).forEach(freq => {
-                const numbers = frequencyGroups[freq];
-                const percentage = numbers[0].percentage;
-                
-                statsHTML += `
-                    <div style="background: #f8f9fa; padding: 15px; border-radius: 8px; margin-bottom: 15px;">
-                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
-                            <strong style="color: #2c3e50;">Appeared ${freq} times (${percentage}%)</strong>
-                            <span style="background: #3498db; color: white; padding: 5px 10px; border-radius: 5px; font-size: 12px;">
-                                ${numbers.length} numbers
-                            </span>
-                        </div>
-                        <div style="display: flex; flex-wrap: wrap; gap: 8px;">
-                            ${numbers.map(num => `
-                                <span style="
-                                    display: inline-flex;
-                                    align-items: center;
-                                    justify-content: center;
-                                    min-width: 45px;
-                                    padding: 8px 12px;
-                                    background: ${num.is_group_a ? 'linear-gradient(135deg, #e74c3c, #c0392b)' : 'linear-gradient(135deg, #34495e, #2c3e50)'};
-                                    color: white;
-                                    border-radius: 8px;
-                                    font-weight: bold;
-                                    font-size: 14px;
-                                    box-shadow: 0 2px 5px rgba(0,0,0,0.2);
-                                ">
-                                    ${num.number}
-                                    ${num.is_group_a ? ' ⭐' : ''}
-                                </span>
-                            `).join('')}
-                        </div>
-                    </div>
-                `;
-            });
-            
-            statsHTML += `
-                </div>
-                
-                <div style="margin-top: 30px;">
-                    <h4>⚡ Powerball Frequencies</h4>
-                    <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; margin-top: 15px;">
-            `;
-            
-            // Display powerball frequencies
-            if (data.powerball_details && typeof data.powerball_details === 'object') {
-                Object.entries(data.powerball_details)
-                    .sort((a, b) => b[1].frequency - a[1].frequency)
-                    .forEach(([pb, details]) => {
-                        if (details.frequency > 0) {
-                            statsHTML += `
-                                <div class="stat-item" style="background: #ffe6e6; padding: 10px; border-radius: 5px;">
-                                    <span><strong>PB #${pb}:</strong></span>
-                                    <span>${details.frequency} (${details.percentage}%)</span>
-                                </div>
-                            `;
-                        }
-                    });
+            document.getElementById('frequency-stats').innerHTML = html;
+        }
+        
+        async function loadDetailedGroupAAnalysis() {
+            const stats = document.getElementById('groupA-stats');
+            stats.innerHTML = '<p>Loading detailed combinations...</p>';
+            try {
+                const res = await fetch('/group_a_detailed_analysis?start_year=2017');
+                detailedGroupAData = await res.json();
+                updateDisplay();
+            } catch(e) {
+                stats.innerHTML = `<div class="error-message">Error: ${e.message}</div>`;
             }
-            
-            statsHTML += `
-                    </div>
-                </div>
-                
-                <div style="margin-top: 20px; padding: 15px; background: #e8f5e8; border-radius: 8px;">
-                    <strong>Legend:</strong> 
-                    <span style="color: #e74c3c;">⭐ Red numbers = Group A numbers</span> | 
-                    <span style="color: #34495e;">Grey numbers = Non-Group A</span>
-                </div>
-            `;
-            
-            statsContainer.innerHTML = statsHTML;
         }
         
         async function loadGroupAAnalysis() {
-            const statsContainer = document.getElementById('groupA-stats');
-            statsContainer.innerHTML = '<p>Loading Group A analysis from 2017 to current year...</p>';
-            
+            const stats = document.getElementById('groupA-stats');
+            stats.innerHTML = '<p>Loading summary...</p>';
             try {
-                const response = await fetch('/group_a_analysis?start_year=2017');
-                const data = await response.json();
-                
-                if (data.error) {
-                    statsContainer.innerHTML = `<p>Error: ${data.error}</p>`;
-                    return;
-                }
-                
-                currentGroupAData = data;
-                updateGroupADisplay();
-                
-            } catch (error) {
-                statsContainer.innerHTML = `<p>Error loading Group A analysis: ${error.message}</p>`;
+                const res = await fetch('/group_a_analysis?start_year=2017');
+                currentGroupAData = await res.json();
+                updateDisplay();
+            } catch(e) {
+                stats.innerHTML = `<div class="error-message">Error: ${e.message}</div>`;
             }
+        }
+        
+        function updateDisplay() {
+            if(detailedGroupAData) updateDetailedGroupADisplay();
+            else if(currentGroupAData) updateGroupADisplay();
+        }
+        
+        function updateDetailedGroupADisplay() {
+            const data = detailedGroupAData;
+            const view = document.getElementById('groupAView').value;
+            const level = document.getElementById('groupALevel').value;
+            const sort = document.getElementById('groupASort').value;
+            
+            let html = `<div style="background:#f8f9fa;padding:20px;border-radius:10px;margin-top:20px;">
+                <h4>📊 Group A Numbers</h4>
+                <div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:10px;">
+                    ${data.group_a_numbers.map(n=>`<span style="padding:8px 12px;background:linear-gradient(135deg,#e74c3c,#c0392b);color:white;border-radius:8px;font-weight:bold;">${n}</span>`).join('')}
+                </div>
+                <div class="stat-item" style="margin-top:15px;"><span>Period:</span><span>${data.start_year}-${data.end_year}</span></div>
+                <div class="stat-item"><span>Total Draws:</span><span>${data.overall_statistics.total_draws}</span></div>
+            </div>`;
+            
+            if(view==='combinations' || view==='overall') {
+                const combos = data.overall_statistics.most_common_combinations;
+                const levels = level==='all' ? [5,4,3,2] : [parseInt(level)];
+                
+                html += '<div style="margin-top:30px;">';
+                levels.forEach(lv=>{
+                    if(!combos[lv]) return;
+                    let items = [...combos[lv]];
+                    if(sort==='recent') items.sort((a,b)=>new Date(b.recent_occurrences[0].date)-new Date(a.recent_occurrences[0].date));
+                    else if(sort==='year_spread') items.sort((a,b)=>b.year_count-a.year_count);
+                    
+                    html += `<div style="margin-bottom:40px;"><h4 style="color:#2c3e50;border-bottom:3px solid #e74c3c;padding-bottom:10px;">${lv} Group A - Top Combinations</h4>`;
+                    items.forEach((c,i)=>{
+                        html += `<div style="background:${i%2?'#f8f9fa':'#fff'};padding:20px;border-radius:10px;margin-bottom:15px;box-shadow:0 2px 5px rgba(0,0,0,0.1);">
+                            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:15px;">
+                                <div style="display:flex;gap:8px;flex-wrap:wrap;">
+                                    ${c.group_a_combination.map(n=>`<span style="padding:10px 14px;background:linear-gradient(135deg,#e74c3c,#c0392b);color:white;border-radius:8px;font-weight:bold;font-size:16px;">${n}</span>`).join('')}
+                                </div>
+                                <div style="text-align:right;">
+                                    <div style="font-size:24px;font-weight:bold;color:#e74c3c;">${c.total_frequency}x</div>
+                                    <div style="font-size:12px;color:#666;">${c.year_count} year${c.year_count>1?'s':''}</div>
+                                </div>
+                            </div>
+                            <div style="margin-top:10px;"><strong>Years:</strong>
+                                <div style="display:flex;flex-wrap:wrap;gap:5px;margin-top:5px;">
+                                    ${c.appeared_in_years.map(y=>`<span style="background:#3498db;color:white;padding:4px 8px;border-radius:4px;font-size:12px;">${y}</span>`).join('')}
+                                </div>
+                            </div>
+                            <div style="margin-top:15px;"><strong>Recent:</strong>
+                                <div style="margin-top:10px;">
+                                    ${c.recent_occurrences.slice(0,3).map(o=>`<div style="padding:8px;background:#ecf0f1;border-radius:5px;margin-bottom:5px;font-size:13px;">
+                                        <strong>${o.date}</strong> (${o.year}) - Non-Group A: ${o.non_group_a.join(', ')}
+                                    </div>`).join('')}
+                                </div>
+                            </div>
+                        </div>`;
+                    });
+                    html += '</div>';
+                });
+                html += '</div>';
+            } else if(view==='by_year') {
+                const years = Object.keys(data.analysis_by_year).map(y=>parseInt(y)).sort((a,b)=>b-a);
+                const levels = level==='all' ? [5,4,3,2] : [parseInt(level)];
+                
+                html += '<div style="margin-top:30px;"><h4>📅 Year-by-Year</h4>';
+                years.forEach(y=>{
+                    const yd = data.analysis_by_year[y];
+                    html += `<div style="background:#fff;padding:20px;border-radius:10px;margin-bottom:20px;box-shadow:0 2px 8px rgba(0,0,0,0.1);">
+                        <div style="display:flex;justify-content:space-between;margin-bottom:15px;">
+                            <h5 style="color:#2c3e50;margin:0;">Year ${y}</h5>
+                            <span style="background:#3498db;color:white;padding:5px 15px;border-radius:5px;">${yd.total_draws} draws</span>
+                        </div>`;
+                    
+                    levels.forEach(lv=>{
+                        if(!yd.most_common_combinations[lv]) return;
+                        html += `<div style="margin-top:15px;"><h6 style="color:#e74c3c;margin-bottom:10px;">${lv} Group A</h6>`;
+                        yd.most_common_combinations[lv].slice(0,5).forEach(c=>{
+                            html += `<div style="background:#f8f9fa;padding:10px;border-radius:5px;margin-bottom:8px;">
+                                <div style="display:flex;justify-content:space-between;align-items:center;">
+                                    <div style="display:flex;gap:5px;">
+                                        ${c.group_a_combination.map(n=>`<span style="padding:6px 10px;background:linear-gradient(135deg,#e74c3c,#c0392b);color:white;border-radius:6px;font-weight:bold;font-size:13px;">${n}</span>`).join('')}
+                                    </div>
+                                    <span style="font-weight:bold;color:#2c3e50;">${c.frequency}x</span>
+                                </div>
+                            </div>`;
+                        });
+                        html += '</div>';
+                    });
+                    html += '</div>';
+                });
+                html += '</div>';
+            }
+            
+            document.getElementById('groupA-stats').innerHTML = html;
         }
         
         function updateGroupADisplay() {
-            if (!currentGroupAData) return;
-            
-            const statsContainer = document.getElementById('groupA-stats');
-            const viewBy = document.getElementById('groupAView').value;
-            const sortBy = document.getElementById('groupASort').value;
             const data = currentGroupAData;
+            const view = document.getElementById('groupAView').value;
             
-            let statsHTML = `
-                <div style="background: #f8f9fa; padding: 20px; border-radius: 10px; margin-top: 20px;">
-                    <h4>📊 Group A Numbers</h4>
-                    <div style="display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px;">
-                        ${Array.from(data.group_a_numbers).sort((a, b) => a - b).map(num => `
-                            <span style="
-                                padding: 8px 12px;
-                                background: linear-gradient(135deg, #e74c3c, #c0392b);
-                                color: white;
-                                border-radius: 8px;
-                                font-weight: bold;
-                            ">${num}</span>
-                        `).join('')}
-                    </div>
-                    <div class="stat-item" style="margin-top: 15px;">
-                        <span><strong>Period:</strong></span>
-                        <span>${data.start_year} - ${data.end_year}</span>
-                    </div>
-                    <div class="stat-item">
-                        <span><strong>Total Draws Analyzed:</strong></span>
-                        <span>${data.overall_statistics.total_draws}</span>
-                    </div>
-                </div>
-            `;
+            let html = `<div style="background:#f8f9fa;padding:20px;border-radius:10px;margin-top:20px;">
+                <h4>📊 Summary</h4>
+                <div class="stat-item"><span>Period:</span><span>${data.start_year}-${data.end_year}</span></div>
+                <div class="stat-item"><span>Total:</span><span>${data.overall_statistics.total_draws}</span></div>
+            </div>`;
             
-            if (viewBy === 'overall') {
-                statsHTML += `
-                    <div style="margin-top: 30px;">
-                        <h4>📈 Overall Distribution (${data.start_year}-${data.end_year})</h4>
-                        ${generateDistributionChart(data.overall_statistics)}
-                    </div>
-                `;
+            if(view==='overall') {
+                html += `<div style="margin-top:30px;"><h4>📈 Overall (${data.start_year}-${data.end_year})</h4>`;
+                html += generateChart(data.overall_statistics) + '</div>';
             } else {
-                // Sort years
-                let years = Object.keys(data.analysis_by_year).map(y => parseInt(y));
-                
-                if (sortBy === 'year_desc') {
-                    years.sort((a, b) => b - a);
-                } else if (sortBy === 'year_asc') {
-                    years.sort((a, b) => a - b);
-                } else if (sortBy === 'most_5') {
-                    years.sort((a, b) => data.analysis_by_year[b].distribution[5] - data.analysis_by_year[a].distribution[5]);
-                } else if (sortBy === 'most_4') {
-                    years.sort((a, b) => data.analysis_by_year[b].distribution[4] - data.analysis_by_year[a].distribution[4]);
-                } else if (sortBy === 'most_3') {
-                    years.sort((a, b) => data.analysis_by_year[b].distribution[3] - data.analysis_by_year[a].distribution[3]);
-                }
-                
-                statsHTML += `<div style="margin-top: 30px;"><h4>📅 Year-by-Year Analysis</h4>`;
-                
-                years.forEach(year => {
-                    const yearData = data.analysis_by_year[year];
-                    statsHTML += `
-                        <div style="background: white; padding: 20px; border-radius: 10px; margin-bottom: 20px; box-shadow: 0 2px 8px rgba(0,0,0,0.1);">
-                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
-                                <h5 style="color: #2c3e50; margin: 0;">Year ${year}</h5>
-                                <span style="background: #3498db; color: white; padding: 5px 15px; border-radius: 5px; font-size: 14px;">
-                                    ${yearData.total_draws} draws
-                                </span>
-                            </div>
-                            ${generateDistributionChart(yearData)}
+                const years = Object.keys(data.analysis_by_year).map(y=>parseInt(y)).sort((a,b)=>b-a);
+                html += '<div style="margin-top:30px;"><h4>📅 By Year</h4>';
+                years.forEach(y=>{
+                    const yd = data.analysis_by_year[y];
+                    html += `<div style="background:#fff;padding:20px;border-radius:10px;margin-bottom:20px;">
+                        <div style="display:flex;justify-content:space-between;margin-bottom:15px;">
+                            <h5>Year ${y}</h5>
+                            <span style="background:#3498db;color:white;padding:5px 15px;border-radius:5px;">${yd.total_draws} draws</span>
                         </div>
-                    `;
+                        ${generateChart(yd)}
+                    </div>`;
                 });
-                
-                statsHTML += `</div>`;
+                html += '</div>';
             }
             
-            statsContainer.innerHTML = statsHTML;
+            document.getElementById('groupA-stats').innerHTML = html;
         }
         
-        function generateDistributionChart(stats) {
-            const distribution = stats.distribution;
-            const percentages = stats.percentages;
-            const maxCount = Math.max(...Object.values(distribution));
+        function generateChart(stats) {
+            const d = stats.distribution, p = stats.percentages;
+            const max = Math.max(...Object.values(d));
+            let html = '<div style="margin-top:15px;">';
             
-            let chartHTML = '<div style="margin-top: 15px;">';
-            
-            [5, 4, 3, 2, 1, 0].forEach(count => {
-                const occurrences = distribution[count];
-                const percentage = percentages[count];
-                const barWidth = maxCount > 0 ? (occurrences / maxCount) * 100 : 0;
-                
-                let barColor = '#95a5a6';
-                if (count === 5) barColor = '#e74c3c';
-                else if (count === 4) barColor = '#e67e22';
-                else if (count === 3) barColor = '#f39c12';
-                else if (count === 2) barColor = '#3498db';
-                else if (count === 1) barColor = '#9b59b6';
-                
-                chartHTML += `
-                    <div style="margin-bottom: 15px;">
-                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 5px;">
-                            <span style="font-weight: bold; min-width: 150px;">${count} Group A Numbers:</span>
-                            <span style="font-size: 14px; color: #666;">${occurrences} times (${percentage}%)</span>
-                        </div>
-                        <div style="background: #ecf0f1; border-radius: 5px; height: 30px; position: relative; overflow: hidden;">
-                            <div style="
-                                background: ${barColor};
-                                width: ${barWidth}%;
-                                height: 100%;
-                                border-radius: 5px;
-                                transition: width 0.3s ease;
-                                display: flex;
-                                align-items: center;
-                                padding-left: 10px;
-                                color: white;
-                                font-weight: bold;
-                            ">
-                                ${occurrences > 0 ? occurrences : ''}
-                            </div>
+            [5,4,3,2,1,0].forEach(c=>{
+                const colors = {5:'#e74c3c',4:'#e67e22',3:'#f39c12',2:'#3498db',1:'#9b59b6',0:'#95a5a6'};
+                const w = max>0 ? (d[c]/max)*100 : 0;
+                html += `<div style="margin-bottom:15px;">
+                    <div style="display:flex;justify-content:space-between;margin-bottom:5px;">
+                        <strong style="min-width:150px;">${c} Group A:</strong>
+                        <span style="color:#666;">${d[c]} (${p[c]}%)</span>
+                    </div>
+                    <div style="background:#ecf0f1;border-radius:5px;height:30px;overflow:hidden;">
+                        <div style="background:${colors[c]};width:${w}%;height:100%;border-radius:5px;display:flex;align-items:center;padding-left:10px;color:white;font-weight:bold;">
+                            ${d[c]>0?d[c]:''}
                         </div>
                     </div>
-                `;
+                </div>`;
             });
-            
-            chartHTML += '</div>';
-            return chartHTML;
+            html += '</div>';
+            return html;
         }
         
-        function showTab(tabName) {
-            // Hide all tabs
-            ['predictions', 'analytics', 'groupA', 'history', 'insights'].forEach(tab => {
-                const tabElement = document.getElementById(`${tab}-tab`);
-                if (tabElement) {
-                    tabElement.style.display = 'none';
-                }
+        function showTab(name) {
+            ['predictions','analytics','groupA','history'].forEach(t=>{
+                const el = document.getElementById(`${t}-tab`);
+                if(el) el.style.display = 'none';
             });
-            
-            // Remove active class from all tab buttons
-            document.querySelectorAll('.tab').forEach(tab => {
-                tab.classList.remove('active');
-            });
-            
-            // Show selected tab
-            const selectedTab = document.getElementById(`${tabName}-tab`);
-            if (selectedTab) {
-                selectedTab.style.display = 'block';
-            }
-            
-            // Add active class to clicked tab
-            if (event && event.target) {
-                event.target.classList.add('active');
-            }
+            document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
+            const tab = document.getElementById(`${name}-tab`);
+            if(tab) tab.style.display = 'block';
+            if(event && event.target) event.target.classList.add('active');
         }
         
-        function showAnalytics() {
-            showTab('analytics');
-        }
-        
-        function showHistory() {
-            showTab('history');
-        }
+        function showAnalytics() { showTab('analytics'); }
+        function showHistory() { showTab('history'); updateHistoryTab(); }
         
         function updateHistoryTab() {
-            const historyContainer = document.getElementById('history-container');
-            
-            if (predictionHistory.length === 0) {
-                historyContainer.innerHTML = '<p>No predictions yet. Generate some numbers to see history!</p>';
+            const container = document.getElementById('history-container');
+            if(predictionHistory.length === 0) {
+                container.innerHTML = '<p>No predictions yet.</p>';
                 return;
             }
-            
-            historyContainer.innerHTML = predictionHistory.map(prediction => `
-                <div class="history-item">
-                    <span>${prediction.date} - ${prediction.model}: ${prediction.numbers.white_balls.join(', ')} ⚡ ${prediction.numbers.powerball}</span>
-                    <span class="accuracy">Group A: ${prediction.analysis.group_a_count || 0}</span>
+            container.innerHTML = predictionHistory.map(p=>`
+                <div style="padding:10px;border-bottom:1px solid #dee2e6;display:flex;justify-content:space-between;">
+                    <span>${p.date} - ${p.model}: ${p.numbers.white_balls.join(', ')} ⚡ ${p.numbers.powerball}</span>
                 </div>
             `).join('');
         }
         
-        // Initialize on page load
-        document.addEventListener('DOMContentLoaded', function() {
-            console.log('Page loaded, ready to generate numbers!');
-            
-            // Test API connection on load
-            testAPI().catch(e => console.log('Initial API test failed:', e));
-        });
+        document.addEventListener('DOMContentLoaded', ()=>console.log('Ready!'));
     </script>
 </body>
 </html>
