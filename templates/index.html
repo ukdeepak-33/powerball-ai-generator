@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>Powerball AI Generator - Enhanced</title>
+    <title>Powerball AI Generator - Complete</title>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); min-height: 100vh; color: #333; }
@@ -39,6 +39,7 @@
         .spinner { width: 50px; height: 50px; border: 5px solid #f3f3f3; border-top: 5px solid #e74c3c; border-radius: 50%; animation: spin 1s linear infinite; margin: 0 auto 20px; }
         @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
         .frequency-details { background: #e8f5e8; padding: 10px; border-radius: 8px; margin-top: 10px; font-size: 12px; }
+        .pattern-details { background: #fff3cd; padding: 10px; border-radius: 8px; margin-top: 10px; font-size: 12px; }
         .error-message { color: #e74c3c; background: #ffe6e6; padding: 15px; border-radius: 8px; margin: 20px 0; text-align: center; }
         @media (max-width: 768px) {
             .header h1 { font-size: 2rem; }
@@ -53,7 +54,7 @@
     <div class="container">
         <div class="header">
             <h1>🎱 Powerball AI Generator</h1>
-            <p>Enhanced with 2025 Frequency Analysis & Detailed Group A Combinations</p>
+            <p>Complete with 2025 Frequency Analysis, Pattern Detection & Group A Combinations</p>
         </div>
         
         <div class="controls">
@@ -61,6 +62,7 @@
                 <button class="btn" onclick="generateNumbers()">🎲 Generate Numbers</button>
                 <button class="btn btn-secondary" onclick="showAnalytics()">📊 View Analytics</button>
                 <button class="btn btn-secondary" onclick="showHistory()">📈 History</button>
+                <button class="btn btn-secondary" onclick="testAPI()">🔧 Test API</button>
             </div>
             <div class="settings">
                 <div class="setting-group">
@@ -78,7 +80,12 @@
                     <select id="analysisDepth">
                         <option value="basic">Basic</option>
                         <option value="detailed">Detailed</option>
+                        <option value="advanced">Advanced (with Patterns)</option>
                     </select>
+                </div>
+                <div class="setting-group">
+                    <label>Show Debug:</label>
+                    <input type="checkbox" id="showDebug">
                 </div>
             </div>
         </div>
@@ -88,25 +95,28 @@
             <button class="tab" onclick="showTab('analytics')">📊 Analytics</button>
             <button class="tab" onclick="showTab('groupA')">🎱 Group A</button>
             <button class="tab" onclick="showTab('history')">📝 History</button>
+            <button class="tab" onclick="showTab('insights')">💡 Insights</button>
         </div>
         
         <div class="tab-content">
             <div id="predictions-tab">
-                <div class="loading" id="loading"><div class="spinner"></div><p>Generating...</p></div>
+                <div class="loading" id="loading"><div class="spinner"></div><p>Generating your lucky numbers...</p></div>
                 <div id="error-container"></div>
+                <div id="debug-container"></div>
                 <div id="results-container" class="results-grid"></div>
             </div>
             
             <div id="analytics-tab" style="display:none;">
                 <h3>📈 2025 Frequency Analytics</h3>
                 <button class="btn btn-secondary" onclick="loadFrequencyAnalysis()">📊 Load Stats</button>
+                <button class="btn btn-secondary" onclick="debugData()">🔧 Debug Data</button>
                 <div class="settings" style="margin-top:20px;">
                     <div class="setting-group">
                         <label>Sort:</label>
                         <select id="frequencySort" onchange="updateFrequencyDisplay()">
                             <option value="frequency_desc">Frequency ↓</option>
                             <option value="frequency_asc">Frequency ↑</option>
-                            <option value="number_asc">Number ↑</option>
+                            <option value="number_asc">Number →</option>
                         </select>
                     </div>
                     <div class="setting-group">
@@ -157,8 +167,19 @@
             </div>
             
             <div id="history-tab" style="display:none;">
-                <h3>🕒 History</h3>
-                <div id="history-container"><p>No predictions yet.</p></div>
+                <h3>🕒 Prediction History</h3>
+                <div id="history-container"><p>No predictions yet. Generate some numbers to see history!</p></div>
+            </div>
+            
+            <div id="insights-tab" style="display:none;">
+                <h3>💡 AI Insights & Recommendations</h3>
+                <div id="insights-content">
+                    <p>🧠 Enhanced frequency and pattern analysis provides:</p>
+                    <div class="stat-item"><span>Individual Frequency Calculation:</span><span>2025 Data ✅</span></div>
+                    <div class="stat-item"><span>Pattern Detection:</span><span>Consecutive, Grouped, Repeating ✅</span></div>
+                    <div class="stat-item"><span>Historical Pattern Analysis:</span><span>Cross-year comparison ✅</span></div>
+                    <div class="stat-item"><span>Group A Combinations:</span><span>Detailed tracking ✅</span></div>
+                </div>
             </div>
         </div>
     </div>
@@ -166,11 +187,22 @@
     <script>
         let predictionHistory=[], currentFrequencyData=null, currentGroupAData=null, detailedGroupAData=null;
         
+        async function testAPI() {
+            try {
+                const res = await fetch('/health');
+                const data = await res.json();
+                alert(`API Status: ${data.status}\nMessage: ${data.message}`);
+            } catch(e) {
+                alert('API test failed: ' + e.message);
+            }
+        }
+        
         async function generateNumbers() {
             const container = document.getElementById('results-container');
             const loading = document.getElementById('loading');
             const errorDiv = document.getElementById('error-container');
-            container.innerHTML = ''; errorDiv.innerHTML = ''; loading.style.display = 'block';
+            const debugDiv = document.getElementById('debug-container');
+            container.innerHTML = ''; errorDiv.innerHTML = ''; debugDiv.innerHTML = ''; loading.style.display = 'block';
             
             try {
                 const res = await fetch('/generate');
@@ -179,16 +211,32 @@
                 
                 const priority = document.getElementById('modelPriority').value;
                 const depth = document.getElementById('analysisDepth').value;
+                const showDebug = document.getElementById('showDebug').checked;
+                
+                if(showDebug) {
+                    debugDiv.innerHTML = `<div style="background:#f0f0f0;padding:10px;border-radius:5px;margin:10px 0;font-family:monospace;font-size:12px;">
+                        <strong>Debug:</strong> Models: ${Object.keys(data).join(', ')}<br>
+                        Raw: ${JSON.stringify(data, null, 2).substring(0, 200)}...
+                    </div>`;
+                }
+                
                 const filtered = priority === 'all' ? data : (data[priority] ? {[priority]: data[priority]} : data);
                 
                 for (const model in filtered) {
                     const card = createCard(model, filtered[model], depth);
                     container.appendChild(card);
-                    predictionHistory.unshift({date: new Date().toLocaleDateString(), model, numbers: filtered[model].generated_numbers});
+                    predictionHistory.unshift({
+                        date: new Date().toLocaleDateString(), 
+                        model, 
+                        numbers: filtered[model].generated_numbers,
+                        analysis: filtered[model].analysis
+                    });
                 }
+                
+                predictionHistory = predictionHistory.slice(0, 50);
             } catch(e) {
                 loading.style.display = 'none';
-                errorDiv.innerHTML = `<div class="error-message">Error: ${e.message}</div>`;
+                errorDiv.innerHTML = `<div class="error-message"><strong>Error:</strong> ${e.message}<br><button class="btn btn-secondary" onclick="testAPI()" style="margin-top:10px;">Test API</button></div>`;
             }
         }
         
@@ -198,6 +246,41 @@
             const nums = data?.generated_numbers?.white_balls || [];
             const pb = data?.generated_numbers?.powerball || '?';
             const analysis = data?.analysis || {};
+            const freq2025 = analysis['2025_frequency'] || {};
+            const freqBreak = analysis.frequency_breakdown || {};
+            
+            let freqTotal = 0;
+            try {
+                const wbCounts = freq2025.white_ball_counts || freq2025.individual_frequencies || {};
+                const wbTotal = Object.values(wbCounts).reduce((a,b)=>(a||0)+(b||0), 0);
+                freqTotal = wbTotal + (freq2025.powerball_count || freqBreak.powerball_frequency || 0);
+            } catch(e) {}
+            
+            let detailsHTML = '';
+            if(depth !== 'basic') {
+                // Frequency details
+                if(freqBreak.individual_white_balls) {
+                    const details = [];
+                    for(const [num, freq] of Object.entries(freqBreak.individual_white_balls)) {
+                        const pct = freqBreak.individual_percentages?.[num] || 0;
+                        details.push(`#${num}: ${freq} (${pct}%)`);
+                    }
+                    detailsHTML += `<div class="frequency-details">
+                        <strong>2025 Individual Frequencies:</strong><br>
+                        ${details.join(' | ')}<br>
+                        <strong>Powerball:</strong> ${freqBreak.powerball_frequency||0} (${freqBreak.powerball_percentage||0}%)
+                    </div>`;
+                }
+                
+                // Pattern details (from v1)
+                if(depth === 'advanced' && analysis.message) {
+                    const msg = analysis.message.replace(/\n/g, '<br>');
+                    detailsHTML += `<div class="pattern-details">
+                        <strong>🔍 Pattern Analysis:</strong><br>
+                        ${msg}
+                    </div>`;
+                }
+            }
             
             card.innerHTML = `
                 <div class="model-name">${name.replace('_',' ').toUpperCase()}</div>
@@ -207,30 +290,47 @@
                 </div>
                 <div class="analysis">
                     <h4>📊 Analysis</h4>
-                    <div class="stat-item"><span>Group A:</span><span>${analysis.group_a_count||0}/5</span></div>
-                    <div class="stat-item"><span>Odd/Even:</span><span>${analysis.odd_even_ratio||'N/A'}</span></div>
-                    ${depth!=='basic' && analysis.frequency_breakdown ? `
-                        <div class="frequency-details">
-                            <strong>2025 Frequencies:</strong><br>
-                            ${Object.entries(analysis.frequency_breakdown.individual_white_balls||{}).map(([n,f])=>
-                                `#${n}: ${f} (${analysis.frequency_breakdown.individual_percentages[n]}%)`
-                            ).join(' | ')}
-                        </div>
-                    ` : ''}
+                    <div class="stat-item"><span>Group A Numbers:</span><span>${analysis.group_a_count||0}/5</span></div>
+                    <div class="stat-item"><span>Odd/Even Ratio:</span><span>${analysis.odd_even_ratio||'N/A'}</span></div>
+                    <div class="stat-item"><span>2025 Frequency Total:</span><span>${freqTotal}</span></div>
+                    <div class="stat-item"><span>2025 Total Draws:</span><span>${freq2025.total_draws||freq2025.total_2025_draws||0}</span></div>
+                    ${detailsHTML}
                 </div>
             `;
             return card;
         }
         
+        async function debugData() {
+            const stats = document.getElementById('frequency-stats');
+            stats.innerHTML = '<p>Running diagnostics...</p>';
+            try {
+                const res = await fetch('/debug_2025_data');
+                const data = await res.json();
+                stats.innerHTML = `<div style="background:#f0f0f0;padding:20px;border-radius:10px;margin-top:20px;">
+                    <h4>🔍 Debug Information</h4>
+                    <div style="font-family:monospace;font-size:12px;white-space:pre-wrap;max-height:600px;overflow-y:auto;">
+                        ${JSON.stringify(data, null, 2)}
+                    </div>
+                    <button class="btn btn-secondary" onclick="loadFrequencyAnalysis()" style="margin-top:15px;">Try Again</button>
+                </div>`;
+            } catch(e) {
+                stats.innerHTML = `<div class="error-message">Debug failed: ${e.message}</div>`;
+            }
+        }
+        
         async function loadFrequencyAnalysis() {
             const stats = document.getElementById('frequency-stats');
-            stats.innerHTML = '<p>Loading...</p>';
+            stats.innerHTML = '<p>Loading 2025 frequency statistics...</p>';
             try {
                 const res = await fetch('/current_year_stats');
                 currentFrequencyData = await res.json();
+                if(currentFrequencyData.error) {
+                    stats.innerHTML = `<div class="error-message"><strong>Error:</strong> ${currentFrequencyData.error}</div>`;
+                    return;
+                }
                 updateFrequencyDisplay();
             } catch(e) {
-                stats.innerHTML = `<div class="error-message">Error: ${e.message}</div>`;
+                stats.innerHTML = `<div class="error-message">Error: ${e.message}<br><button class="btn btn-secondary" onclick="loadFrequencyAnalysis()">Retry</button></div>`;
             }
         }
         
@@ -252,26 +352,41 @@
             nums.forEach(n=>{ if(!groups[n.frequency]) groups[n.frequency]=[]; groups[n.frequency].push(n); });
             
             let html = `<div style="background:#f8f9fa;padding:20px;border-radius:10px;margin-top:20px;">
-                <h4>📊 2025 Stats</h4>
-                <div class="stat-item"><span>Total Draws:</span><span>${data.total_draws||0}</span></div>
-                <div class="stat-item"><span>Showing:</span><span>${nums.length} numbers</span></div>
-            </div><div style="margin-top:30px;"><h4>🎯 Frequencies (Grouped)</h4>`;
+                <h4>📊 2025 Statistics</h4>
+                <div class="stat-item"><span><strong>Total Draws:</strong></span><span>${data.total_draws||0}</span></div>
+                <div class="stat-item"><span><strong>Last Updated:</strong></span><span>${data.last_updated||'N/A'}</span></div>
+                <div class="stat-item"><span><strong>Showing:</strong></span><span>${nums.length} numbers</span></div>
+            </div><div style="margin-top:30px;"><h4>🎯 White Ball Frequencies (Grouped)</h4>`;
             
             Object.keys(groups).sort((a,b)=>b-a).forEach(freq=>{
                 const items = groups[freq];
                 html += `<div style="background:#f8f9fa;padding:15px;border-radius:8px;margin-bottom:15px;">
-                    <div style="display:flex;justify-content:space-between;margin-bottom:10px;">
-                        <strong>${freq}x (${items[0].percentage}%)</strong>
-                        <span style="background:#3498db;color:white;padding:5px 10px;border-radius:5px;">${items.length} nums</span>
+                    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
+                        <strong style="color:#2c3e50;">Appeared ${freq} times (${items[0].percentage}%)</strong>
+                        <span style="background:#3498db;color:white;padding:5px 10px;border-radius:5px;font-size:12px;">${items.length} numbers</span>
                     </div>
                     <div style="display:flex;flex-wrap:wrap;gap:8px;">
-                        ${items.map(n=>`<span style="padding:8px 12px;background:${n.is_group_a?'linear-gradient(135deg,#e74c3c,#c0392b)':'linear-gradient(135deg,#34495e,#2c3e50)'};color:white;border-radius:8px;font-weight:bold;">${n.number}${n.is_group_a?' ⭐':''}</span>`).join('')}
+                        ${items.map(n=>`<span style="display:inline-flex;align-items:center;justify-content:center;min-width:45px;padding:8px 12px;background:${n.is_group_a?'linear-gradient(135deg,#e74c3c,#c0392b)':'linear-gradient(135deg,#34495e,#2c3e50)'};color:white;border-radius:8px;font-weight:bold;font-size:14px;box-shadow:0 2px 5px rgba(0,0,0,0.2);">${n.number}${n.is_group_a?' ⭐':''}</span>`).join('')}
                     </div>
                 </div>`;
             });
             
-            html += `</div><div style="margin-top:20px;padding:15px;background:#e8f5e8;border-radius:8px;">
-                <strong>Legend:</strong> <span style="color:#e74c3c;">⭐ = Group A</span>
+            html += `</div><div style="margin-top:30px;"><h4>⚡ Powerball Frequencies</h4>
+                <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px;margin-top:15px;">`;
+            
+            if(data.powerball_details && typeof data.powerball_details === 'object') {
+                Object.entries(data.powerball_details).sort((a,b)=>b[1].frequency-a[1].frequency).forEach(([pb,details])=>{
+                    if(details.frequency > 0) {
+                        html += `<div class="stat-item" style="background:#ffe6e6;padding:10px;border-radius:5px;">
+                            <span><strong>PB #${pb}:</strong></span>
+                            <span>${details.frequency} (${details.percentage}%)</span>
+                        </div>`;
+                    }
+                });
+            }
+            
+            html += `</div></div><div style="margin-top:20px;padding:15px;background:#e8f5e8;border-radius:8px;">
+                <strong>Legend:</strong> <span style="color:#e74c3c;">⭐ Red = Group A</span> | <span style="color:#34495e;">Grey = Non-Group A</span>
             </div>`;
             
             document.getElementById('frequency-stats').innerHTML = html;
@@ -317,8 +432,8 @@
                 <div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:10px;">
                     ${data.group_a_numbers.map(n=>`<span style="padding:8px 12px;background:linear-gradient(135deg,#e74c3c,#c0392b);color:white;border-radius:8px;font-weight:bold;">${n}</span>`).join('')}
                 </div>
-                <div class="stat-item" style="margin-top:15px;"><span>Period:</span><span>${data.start_year}-${data.end_year}</span></div>
-                <div class="stat-item"><span>Total Draws:</span><span>${data.overall_statistics.total_draws}</span></div>
+                <div class="stat-item" style="margin-top:15px;"><span><strong>Period:</strong></span><span>${data.start_year}-${data.end_year}</span></div>
+                <div class="stat-item"><span><strong>Total Draws:</strong></span><span>${data.overall_statistics.total_draws}</span></div>
             </div>`;
             
             if(view==='combinations' || view==='overall') {
@@ -349,7 +464,7 @@
                                     ${c.appeared_in_years.map(y=>`<span style="background:#3498db;color:white;padding:4px 8px;border-radius:4px;font-size:12px;">${y}</span>`).join('')}
                                 </div>
                             </div>
-                            <div style="margin-top:15px;"><strong>Recent:</strong>
+                            <div style="margin-top:15px;"><strong>Recent Occurrences:</strong>
                                 <div style="margin-top:10px;">
                                     ${c.recent_occurrences.slice(0,3).map(o=>`<div style="padding:8px;background:#ecf0f1;border-radius:5px;margin-bottom:5px;font-size:13px;">
                                         <strong>${o.date}</strong> (${o.year}) - Non-Group A: ${o.non_group_a.join(', ')}
@@ -365,22 +480,22 @@
                 const years = Object.keys(data.analysis_by_year).map(y=>parseInt(y)).sort((a,b)=>b-a);
                 const levels = level==='all' ? [5,4,3,2] : [parseInt(level)];
                 
-                html += '<div style="margin-top:30px;"><h4>📅 Year-by-Year</h4>';
+                html += '<div style="margin-top:30px;"><h4>📅 Year-by-Year Analysis</h4>';
                 years.forEach(y=>{
                     const yd = data.analysis_by_year[y];
                     html += `<div style="background:#fff;padding:20px;border-radius:10px;margin-bottom:20px;box-shadow:0 2px 8px rgba(0,0,0,0.1);">
-                        <div style="display:flex;justify-content:space-between;margin-bottom:15px;">
+                        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:15px;">
                             <h5 style="color:#2c3e50;margin:0;">Year ${y}</h5>
-                            <span style="background:#3498db;color:white;padding:5px 15px;border-radius:5px;">${yd.total_draws} draws</span>
+                            <span style="background:#3498db;color:white;padding:5px 15px;border-radius:5px;font-size:14px;">${yd.total_draws} draws</span>
                         </div>`;
                     
                     levels.forEach(lv=>{
                         if(!yd.most_common_combinations[lv]) return;
-                        html += `<div style="margin-top:15px;"><h6 style="color:#e74c3c;margin-bottom:10px;">${lv} Group A</h6>`;
+                        html += `<div style="margin-top:15px;"><h6 style="color:#e74c3c;margin-bottom:10px;">${lv} Group A Numbers</h6>`;
                         yd.most_common_combinations[lv].slice(0,5).forEach(c=>{
                             html += `<div style="background:#f8f9fa;padding:10px;border-radius:5px;margin-bottom:8px;">
                                 <div style="display:flex;justify-content:space-between;align-items:center;">
-                                    <div style="display:flex;gap:5px;">
+                                    <div style="display:flex;gap:5px;flex-wrap:wrap;">
                                         ${c.group_a_combination.map(n=>`<span style="padding:6px 10px;background:linear-gradient(135deg,#e74c3c,#c0392b);color:white;border-radius:6px;font-weight:bold;font-size:13px;">${n}</span>`).join('')}
                                     </div>
                                     <span style="font-weight:bold;color:#2c3e50;">${c.frequency}x</span>
@@ -402,23 +517,26 @@
             const view = document.getElementById('groupAView').value;
             
             let html = `<div style="background:#f8f9fa;padding:20px;border-radius:10px;margin-top:20px;">
-                <h4>📊 Summary</h4>
-                <div class="stat-item"><span>Period:</span><span>${data.start_year}-${data.end_year}</span></div>
-                <div class="stat-item"><span>Total:</span><span>${data.overall_statistics.total_draws}</span></div>
+                <h4>📊 Group A Summary</h4>
+                <div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:10px;">
+                    ${Array.from(data.group_a_numbers).sort((a,b)=>a-b).map(n=>`<span style="padding:8px 12px;background:linear-gradient(135deg,#e74c3c,#c0392b);color:white;border-radius:8px;font-weight:bold;">${n}</span>`).join('')}
+                </div>
+                <div class="stat-item" style="margin-top:15px;"><span><strong>Period:</strong></span><span>${data.start_year}-${data.end_year}</span></div>
+                <div class="stat-item"><span><strong>Total Draws:</strong></span><span>${data.overall_statistics.total_draws}</span></div>
             </div>`;
             
             if(view==='overall') {
-                html += `<div style="margin-top:30px;"><h4>📈 Overall (${data.start_year}-${data.end_year})</h4>`;
+                html += `<div style="margin-top:30px;"><h4>📈 Overall Distribution (${data.start_year}-${data.end_year})</h4>`;
                 html += generateChart(data.overall_statistics) + '</div>';
             } else {
                 const years = Object.keys(data.analysis_by_year).map(y=>parseInt(y)).sort((a,b)=>b-a);
-                html += '<div style="margin-top:30px;"><h4>📅 By Year</h4>';
+                html += '<div style="margin-top:30px;"><h4>📅 Year-by-Year Distribution</h4>';
                 years.forEach(y=>{
                     const yd = data.analysis_by_year[y];
-                    html += `<div style="background:#fff;padding:20px;border-radius:10px;margin-bottom:20px;">
-                        <div style="display:flex;justify-content:space-between;margin-bottom:15px;">
-                            <h5>Year ${y}</h5>
-                            <span style="background:#3498db;color:white;padding:5px 15px;border-radius:5px;">${yd.total_draws} draws</span>
+                    html += `<div style="background:#fff;padding:20px;border-radius:10px;margin-bottom:20px;box-shadow:0 2px 8px rgba(0,0,0,0.1);">
+                        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:15px;">
+                            <h5 style="color:#2c3e50;margin:0;">Year ${y}</h5>
+                            <span style="background:#3498db;color:white;padding:5px 15px;border-radius:5px;font-size:14px;">${yd.total_draws} draws</span>
                         </div>
                         ${generateChart(yd)}
                     </div>`;
@@ -438,12 +556,12 @@
                 const colors = {5:'#e74c3c',4:'#e67e22',3:'#f39c12',2:'#3498db',1:'#9b59b6',0:'#95a5a6'};
                 const w = max>0 ? (d[c]/max)*100 : 0;
                 html += `<div style="margin-bottom:15px;">
-                    <div style="display:flex;justify-content:space-between;margin-bottom:5px;">
-                        <strong style="min-width:150px;">${c} Group A:</strong>
-                        <span style="color:#666;">${d[c]} (${p[c]}%)</span>
+                    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:5px;">
+                        <strong style="min-width:150px;">${c} Group A Numbers:</strong>
+                        <span style="font-size:14px;color:#666;">${d[c]} times (${p[c]}%)</span>
                     </div>
-                    <div style="background:#ecf0f1;border-radius:5px;height:30px;overflow:hidden;">
-                        <div style="background:${colors[c]};width:${w}%;height:100%;border-radius:5px;display:flex;align-items:center;padding-left:10px;color:white;font-weight:bold;">
+                    <div style="background:#ecf0f1;border-radius:5px;height:30px;position:relative;overflow:hidden;">
+                        <div style="background:${colors[c]};width:${w}%;height:100%;border-radius:5px;transition:width 0.3s ease;display:flex;align-items:center;padding-left:10px;color:white;font-weight:bold;">
                             ${d[c]>0?d[c]:''}
                         </div>
                     </div>
@@ -454,7 +572,7 @@
         }
         
         function showTab(name) {
-            ['predictions','analytics','groupA','history'].forEach(t=>{
+            ['predictions','analytics','groupA','history','insights'].forEach(t=>{
                 const el = document.getElementById(`${t}-tab`);
                 if(el) el.style.display = 'none';
             });
@@ -470,17 +588,21 @@
         function updateHistoryTab() {
             const container = document.getElementById('history-container');
             if(predictionHistory.length === 0) {
-                container.innerHTML = '<p>No predictions yet.</p>';
+                container.innerHTML = '<p>No predictions yet. Generate some numbers to see history!</p>';
                 return;
             }
             container.innerHTML = predictionHistory.map(p=>`
-                <div style="padding:10px;border-bottom:1px solid #dee2e6;display:flex;justify-content:space-between;">
-                    <span>${p.date} - ${p.model}: ${p.numbers.white_balls.join(', ')} ⚡ ${p.numbers.powerball}</span>
+                <div style="padding:10px;border-bottom:1px solid #dee2e6;display:flex;justify-content:space-between;align-items:center;">
+                    <span><strong>${p.date}</strong> - ${p.model}: ${p.numbers.white_balls.join(', ')} ⚡ ${p.numbers.powerball}</span>
+                    <span style="background:#e8f5e8;padding:5px 10px;border-radius:5px;font-size:12px;">Group A: ${p.analysis?.group_a_count||0}/5</span>
                 </div>
             `).join('');
         }
         
-        document.addEventListener('DOMContentLoaded', ()=>console.log('Ready!'));
+        document.addEventListener('DOMContentLoaded', ()=>{
+            console.log('Powerball AI Generator ready!');
+            testAPI().catch(e=>console.log('Initial API test:', e));
+        });
     </script>
 </body>
 </html>
